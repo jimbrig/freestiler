@@ -19,19 +19,22 @@ VENDOR_DIR = $(CURDIR)/vendor
 # CRAN note: Cargo and Rustc versions are reported during
 # configure via tools/msrv.R.
 #
-# If a vendor directory exists, it is used for offline compilation. Otherwise if
-# vendor.tar.xz exists, it is unzipped and used for offline compilation.
+# If @USE_VENDOR@ is true, use vendored crates for offline compilation.
 $(STATLIB):
 
-	if [ -d ./vendor ]; then \
-		echo "=== Using offline vendor directory ==="; \
-		mkdir -p $(CARGOTMP) && \
-		cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
-	elif [ -f ./rust/vendor.tar.xz ]; then \
-		echo "=== Using offline vendor tarball ==="; \
-		tar xf rust/vendor.tar.xz && \
-		mkdir -p $(CARGOTMP) && \
-		cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
+	rm -Rf $(CARGOTMP)
+
+	if [ "@USE_VENDOR@" = "true" ]; then \
+		if [ -d ./vendor ]; then \
+			echo "=== Using offline vendor directory ==="; \
+			mkdir -p $(CARGOTMP) && \
+			cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
+		elif [ -f ./rust/vendor.tar.xz ]; then \
+			echo "=== Using offline vendor tarball ==="; \
+			tar xf rust/vendor.tar.xz && \
+			mkdir -p $(CARGOTMP) && \
+			cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
+		fi; \
 	fi
 
 	if [ -d ./vendor ]; then \

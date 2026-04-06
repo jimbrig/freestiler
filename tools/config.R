@@ -33,6 +33,11 @@ if (!is_not_cran) {
   ""
 )
 
+# only use vendored rust crates for CRAN-style builds. GitHub/CI source builds
+# should resolve crates online so optional dependency updates do not require
+# re-vendoring first.
+.use_vendor <- ifelse(!is_not_cran && vendor_exists, "true", "false")
+
 # when DEBUG env var is present we use `--debug` build
 .profile <- ifelse(is_debug, "", "--release")
 .clean_targets <- ifelse(is_debug, "", "$(TARGET_DIR)")
@@ -138,6 +143,7 @@ mv_txt <- readLines(mv_fp)
 
 # replace placeholder values
 new_txt <- gsub("@CRAN_FLAGS@", .cran_flags, mv_txt) |>
+  gsub("@USE_VENDOR@", .use_vendor, x = _) |>
   gsub("@PROFILE@", .profile, x = _) |>
   gsub("@CLEAN_TARGET@", .clean_targets, x = _) |>
   gsub("@LIBDIR@", .libdir, x = _) |>

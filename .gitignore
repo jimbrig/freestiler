@@ -33,5 +33,5 @@ python/nc.dbf
 python/nc.prj
 python/nc.shp
 python/nc.shx
-.r-lib-geoparquet*/
+build/
 src/._vendor

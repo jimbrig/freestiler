@@ -21,9 +21,26 @@ install.packages(
 Or install from GitHub:
 
 ```r
-# install.packages("devtools")
-devtools::install_github("walkerke/freestiler")
+# install.packages("pak")
+pak::pak("jimbrig/freestiler")
 ```
+
+Source builds support optional Rust features via environment variables. For
+example, this enables the direct GeoParquet reader:
+
+```r
+Sys.setenv(
+  NOT_CRAN = "true",
+  FREESTILER_GEOPARQUET = "true"
+)
+
+pak::pak("jimbrig/freestiler")
+```
+
+When the `geoparquet` feature is enabled, the Rust reader supports both Snappy-
+and Zstd-compressed GeoParquet files. On Windows, the Rust DuckDB backend
+remains disabled by default, so `freestile_query()` still falls back to the R
+`duckdb` package unless you maintain a separate custom build.
 
 ### Python
 
@@ -143,6 +160,11 @@ freestile_file("census_blocks.parquet", "blocks.pmtiles")
 # GeoPackage, Shapefile, or other formats via DuckDB
 freestile_file("counties.gpkg", "counties.pmtiles", engine = "duckdb")
 ```
+
+For GeoParquet, the direct file path is powered by the optional Rust
+`geoparquet` feature. If you install from source with
+`FREESTILER_GEOPARQUET=true`, `freestile_file()` can read WKB-based GeoParquet
+directly without materializing the data in the R session first.
 
 ## Multi-layer tilesets
 

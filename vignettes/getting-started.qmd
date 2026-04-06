@@ -27,7 +27,20 @@ install.packages(
 )
 ```
 
-The r-universe build includes the Rust DuckDB backend on macOS and Linux, which powers the streaming point pipeline in `freestile_query()`. You can also install from GitHub with `devtools::install_github("walkerke/freestiler")`.
+The r-universe build includes the Rust DuckDB backend on macOS and Linux, which powers the streaming point pipeline in `freestile_query()`. You can also install from GitHub with `pak::pak("jimbrig/freestiler")` or `devtools::install_github("jimbrig/freestiler")`.
+
+If you need the direct Rust GeoParquet reader in an R source build, enable it before installation:
+
+``` r
+Sys.setenv(
+  NOT_CRAN = "true",
+  FREESTILER_GEOPARQUET = "true"
+)
+
+pak::pak("jimbrig/freestiler")
+```
+
+With the `geoparquet` feature enabled, the Rust reader supports both Snappy- and Zstd-compressed GeoParquet files. On Windows, the Rust DuckDB backend is still disabled by default, so `freestile_query()` falls back to the R `duckdb` package unless you maintain a custom build with DuckDB enabled.
 
 For Python, see the [Python Setup](python.html) article.
 

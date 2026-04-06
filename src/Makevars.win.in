@@ -17,18 +17,20 @@ VENDOR_DIR = vendor
 $(STATLIB):
 	mkdir -p $(TARGET_DIR)/libgcc_mock
 	touch $(TARGET_DIR)/libgcc_mock/libgcc_eh.a
+	rm -Rf $(CARGOTMP)
 
-  # If a vendor directory exists, it is used for offline compilation. Otherwise if
-  # vendor.tar.xz exists, it is unzipped and used for offline compilation.
-	if [ -d ./vendor ]; then \
-		echo "=== Using offline vendor directory ==="; \
-		mkdir -p $(CARGOTMP) && \
-		cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
-	elif [ -f ./rust/vendor.tar.xz ]; then \
-		echo "=== Using offline vendor tarball ==="; \
-		tar xf rust/vendor.tar.xz && \
-		mkdir -p $(CARGOTMP) && \
-		cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
+  # If @USE_VENDOR@ is true, use vendored crates for offline compilation.
+	if [ "@USE_VENDOR@" = "true" ]; then \
+		if [ -d ./vendor ]; then \
+			echo "=== Using offline vendor directory ==="; \
+			mkdir -p $(CARGOTMP) && \
+			cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
+		elif [ -f ./rust/vendor.tar.xz ]; then \
+			echo "=== Using offline vendor tarball ==="; \
+			tar xf rust/vendor.tar.xz && \
+			mkdir -p $(CARGOTMP) && \
+			cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
+		fi; \
 	fi
 
 	if [ -d ./vendor ]; then \
