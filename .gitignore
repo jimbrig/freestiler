@@ -1,5 +1,6 @@
 src/rust/target
 src/rust/vendor
+src/vendor/
 src/.cargo
 src/Makevars
 src/Makevars.win
@@ -32,3 +33,5 @@ python/nc.dbf
 python/nc.prj
 python/nc.shp
 python/nc.shx
+.r-lib-geoparquet*/
+src/._vendor
