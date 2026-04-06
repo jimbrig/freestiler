@@ -1,6 +1,7 @@
 # freestiler <a href="https://walker-data.com/freestiler/"><img src="man/figures/logo.png" align="right" height="139" alt="freestiler logo" /></a>
 
 <!-- badges: start -->
+[![R Package](https://github.com/jimbrig/freestiler/actions/workflows/r-package.yml/badge.svg)](https://github.com/jimbrig/freestiler/actions/workflows/r-package.yml)
 <!-- badges: end -->
 
 **freestiler** creates [PMTiles](https://github.com/protomaps/PMTiles) vector tilesets from R and Python. Give it an sf object, a file on disk, or a DuckDB SQL query, and it writes a single `.pmtiles` file you can serve from anywhere. The tiling engine is written in Rust and runs in-process, so there's nothing else to install.
