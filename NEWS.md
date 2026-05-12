@@ -1,3 +1,8 @@
+# freestiler 0.1.7
+
+* Updated the CRAN Rust build path to use a dependency graph compatible with
+  rustc/cargo 1.77.2.
+
 # freestiler 0.1.0
 
 Initial release.

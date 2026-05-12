@@ -80,6 +80,32 @@ cfg <- if (is_debug) "debug" else "release"
   ""
 )
 
+# Match Rust dependency C builds to R's macOS link target. Without this, build
+# scripts using the cc crate can inherit the SDK version and produce objects
+# newer than the deployment target used when R links the final shared library.
+.macos_deployment <- ""
+if (!is_windows && identical(Sys.info()[["sysname"]], "Darwin")) {
+  deployment_target <- Sys.getenv("MACOSX_DEPLOYMENT_TARGET")
+  if (!nzchar(deployment_target)) {
+    macos_version <- suppressWarnings(system2(
+      "sw_vers", "-productVersion",
+      stdout = TRUE, stderr = FALSE
+    ))
+    if (length(macos_version) > 0L &&
+        grepl("^[0-9]+(\\.[0-9]+)?", macos_version[1L])) {
+      macos_major <- sub("^([0-9]+).*", "\\1", macos_version[1L])
+      deployment_target <- paste0(macos_major, ".0")
+    }
+  }
+  if (nzchar(deployment_target)) {
+    message("Using MACOSX_DEPLOYMENT_TARGET=", deployment_target,
+            " for Rust build.")
+    .macos_deployment <- paste0(
+      "MACOSX_DEPLOYMENT_TARGET=", deployment_target, " "
+    )
+  }
+}
+
 # Cargo features
 # Keep advanced encodings opt-in for decoder compatibility.
 features <- character(0)
@@ -154,6 +180,7 @@ new_txt <- gsub("@CRAN_FLAGS@", .cran_flags, mv_txt) |>
   gsub("@CLEAN_TARGET@", .clean_targets, x = _) |>
   gsub("@LIBDIR@", .libdir, x = _) |>
   gsub("@TARGET@", .target, x = _) |>
+  gsub("@MACOS_DEPLOYMENT@", .macos_deployment, x = _) |>
   gsub("@PANIC_EXPORTS@", .panic_exports, x = _) |>
   gsub("@FEATURES@", .features, x = _)
 

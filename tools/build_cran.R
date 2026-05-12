@@ -66,6 +66,7 @@ cran_toml <- c(
   'name = "freestiler-core"',
   version_line,
   'edition = "2021"',
+  'rust-version = "1.77.2"',
   'description = "Core Rust engine for building PMTiles vector tilesets"',
   'license = "MIT"',
   'publish = false',
@@ -76,13 +77,21 @@ cran_toml <- c(
   '[dependencies]',
   'geo = "0.29"',
   'geo-types = "0.7"',
+  '# Keep geo\'s transitive spade dependency before Rust 1.78-only API usage.',
+  'spade = "=2.13.1"',
   'prost = "0.13"',
-  'pmtiles2 = "0.3"',
-  'integer-encoding = "4"',
+  'pmtiles2 = "=0.3.1"',
+  '# Keep pmtiles2\'s proc-macro dependency chain on pre-Edition-2024 indexmap.',
+  'indexmap = "=2.10.0"',
+  'integer-encoding = "=4.0.2"',
   'flate2 = "1"',
   'serde = { version = "1", features = ["derive"] }',
   'serde_json = "1"',
-  'rayon = "1.10"'
+  'rayon = "=1.10.0"',
+  '# Keep rayon\'s transitive core crate below Rust 1.80-only releases.',
+  'rayon-core = "=1.12.1"',
+  '# Keep cc\'s jobserver branch from vendoring Windows-only Edition 2024 crates.',
+  'jobserver = "=0.1.32"'
 )
 writeLines(cran_toml, core_toml)
 
@@ -99,6 +108,12 @@ unlink("src/vendor", recursive = TRUE)
 # Regenerate lockfile to match stripped Cargo.toml (rextendr uses --locked)
 system2("cargo", c("generate-lockfile",
   "--manifest-path", "src/rust/Cargo.toml"))
+
+# Cargo >= 1.78 can write lockfile v4, which Cargo 1.77.2 cannot parse.
+# The CRAN dependency graph does not require v4-specific fields.
+lock_lines <- readLines(root_lock)
+lock_lines <- sub("^version = 4$", "version = 3", lock_lines)
+writeLines(lock_lines, root_lock)
 
 rextendr::vendor_pkgs()
 
