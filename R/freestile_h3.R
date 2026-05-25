@@ -270,6 +270,12 @@ freestile_h3 <- function(
 #'   default is used.
 #' @param background_style mapgl style passed to [mapgl::maplibre()]; if
 #'   `NULL` uses `mapgl::maplibre()` defaults.
+#' @param hex_layer_prefix Character. Prefix used when the archive was
+#'   written. Must match the value passed to [freestile_h3()]; default
+#'   `"h3"`.
+#' @param point_layer_name Character. Name of the raw-points MVT layer in
+#'   the archive. Must match the value passed to [freestile_h3()]; default
+#'   `"points"`.
 #' @param port Integer. Port for the local PMTiles server (default 8080).
 #'
 #' @return A `mapgl` map object.
@@ -539,6 +545,16 @@ view_h3_tiles <- function(
 
   if (!is.numeric(h3_resolutions)) {
     stop("`h3_resolutions` must be NULL or an integer vector.", call. = FALSE)
+  }
+
+  # Reject fractional values up front rather than silently truncating via
+  # as.integer().
+  vals <- unname(h3_resolutions)
+  if (any(!is.na(vals) & vals != floor(vals))) {
+    stop(sprintf(
+      "`h3_resolutions` must be whole numbers in 0..15; got fractional value(s): %s",
+      paste(unique(vals[!is.na(vals) & vals != floor(vals)]), collapse = ", ")
+    ), call. = FALSE)
   }
 
   if (is.null(names(h3_resolutions)) || all(names(h3_resolutions) == "")) {

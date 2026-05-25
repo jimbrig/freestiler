@@ -330,6 +330,27 @@ test_that("h3_resolutions rejects names outside the hex zoom range", {
   )
 })
 
+test_that("h3_resolutions rejects fractional values (positional and named)", {
+  pts <- .make_points(n = 100L)
+  output <- tempfile(fileext = ".pmtiles")
+
+  expect_error(
+    freestile_h3(pts, output,
+      min_zoom = 0L, max_zoom = 4L, base_zoom = 2L,
+      h3_resolutions = c(1.9, 2.1),
+      quiet = TRUE),
+    "whole number"
+  )
+
+  expect_error(
+    freestile_h3(pts, output,
+      min_zoom = 0L, max_zoom = 4L, base_zoom = 3L,
+      h3_resolutions = c(`0` = 1.5),
+      quiet = TRUE),
+    "whole number"
+  )
+})
+
 test_that("h3_resolutions rejects values outside 0..15", {
   pts <- .make_points(n = 100L)
   output <- tempfile(fileext = ".pmtiles")

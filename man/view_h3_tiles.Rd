@@ -13,6 +13,8 @@ view_h3_tiles(
   point_color = "#0868ac",
   point_radius = NULL,
   background_style = NULL,
+  hex_layer_prefix = "h3",
+  point_layer_name = "points",
   port = 8080
 )
 }
@@ -44,6 +46,14 @@ default is used.}
 
 \item{background_style}{mapgl style passed to \code{\link[mapgl:maplibre]{mapgl::maplibre()}}; if
 \code{NULL} uses \code{mapgl::maplibre()} defaults.}
+
+\item{hex_layer_prefix}{Character. Prefix used when the archive was
+written. Must match the value passed to \code{\link[=freestile_h3]{freestile_h3()}}; default
+\code{"h3"}.}
+
+\item{point_layer_name}{Character. Name of the raw-points MVT layer in
+the archive. Must match the value passed to \code{\link[=freestile_h3]{freestile_h3()}}; default
+\code{"points"}.}
 
 \item{port}{Integer. Port for the local PMTiles server (default 8080).}
 }
