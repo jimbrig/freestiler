@@ -564,6 +564,83 @@ test_that("view_h3_tiles() emits non-empty mapgl style zoom intervals", {
   }
 })
 
+test_that(".h3_fade_opacity() emits strictly increasing inputs (regression)", {
+  skip_if_not_installed("mapgl")
+  # Regression: a 3-zoom hex window with fade_overlap = 1 used to produce
+  # `values = c(min, min+1, max-1, max) = c(2, 3, 3, 4)` — duplicate at
+  # zoom 3. MapLibre rejects non-strictly-increasing `interpolate` inputs,
+  # which silently broke every hex layer whose window wasn't wider than
+  # 2 * fade_overlap. After the fix, narrow windows should fall back to
+  # a triangle envelope (strictly increasing by construction).
+  #
+  # `mapgl::interpolate(property = "zoom", values = v, stops = s)` returns a
+  # flat list shaped like
+  #   list("interpolate", list("linear"), list("zoom"),
+  #        v[1], s[1], v[2], s[2], ...)
+  # so the zoom inputs live at even positions starting at index 4.
+  extract_inputs <- function(expr) {
+    if (is.numeric(expr) && length(expr) == 1L) return(NULL)  # constant
+    stopifnot(is.list(expr), length(expr) >= 5L)
+    idx <- seq(4L, length(expr), by = 2L)
+    as.numeric(unlist(expr[idx]))
+  }
+  for (sz in 1:5) {           # window span in zooms
+    for (mn in c(0L, 4L)) {   # test at min_zoom = 0 and an offset
+      mx <- mn + sz
+      for (ov in 1:3) {
+        out <- freestiler:::.h3_fade_opacity(mn, mx, peak = 0.9, overlap = ov)
+        inputs <- extract_inputs(out)
+        if (is.null(inputs)) next
+        # Strictly increasing: all consecutive diffs > 0.
+        expect_true(
+          all(diff(inputs) > 0),
+          info = sprintf("min=%d max=%d overlap=%d -> inputs=%s",
+            mn, mx, ov, paste(inputs, collapse = ","))
+        )
+        # And the envelope should still span the full window.
+        expect_equal(inputs[1L], mn,
+          info = sprintf("min=%d max=%d overlap=%d", mn, mx, ov))
+        expect_equal(inputs[length(inputs)], mx,
+          info = sprintf("min=%d max=%d overlap=%d", mn, mx, ov))
+      }
+    }
+  }
+})
+
+test_that("view_h3_tiles() warns when no points layer matches `point_layer_name`", {
+  skip_if_no_h3()
+  skip_if_not_installed("mapgl")
+  skip_if_not_installed("httpuv")
+
+  pts <- .make_points(n = 500L)
+  output <- tempfile(fileext = ".pmtiles")
+  on.exit({
+    unlink(output)
+    try(stop_server(), silent = TRUE)
+  }, add = TRUE)
+
+  # Write with a custom point_layer_name...
+  freestile_h3(
+    pts, output,
+    point_layer_name = "wells_custom",
+    min_zoom = 2L, max_zoom = 5L, base_zoom = 4L,
+    quiet = TRUE
+  )
+
+  # ...then read with the default. Should warn (and still build the map).
+  expect_warning(
+    m <- view_h3_tiles(
+      output,
+      agg_column = "count",
+      stops = list(values = c(1, 10, 100),
+                   colors = c("#fef0d9", "#fdcc8a", "#d7301f")),
+      port = 8286
+    ),
+    "point_layer_name"
+  )
+  expect_s3_class(m, "htmlwidget")
+})
+
 test_that("view_h3_tiles() smoke test builds a mapgl map", {
   skip_if_no_h3()
   skip_if_not_installed("mapgl")

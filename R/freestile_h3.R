@@ -335,6 +335,31 @@ view_h3_tiles <- function(
     )
   }
 
+  # If the caller's `point_layer_name` didn't match anything but the archive
+  # does have non-hex layers, the most likely cause is a `point_layer_name`
+  # mismatch between the freestile_h3() write and this view_h3_tiles() read.
+  # Surface that explicitly — silent failure here has cost us before.
+  if (is.null(point_layer)) {
+    hex_pattern <- paste0("^", .h3_escape_regex(hex_layer_prefix), "_r\\d{2}$")
+    other_ids <- vapply(layers_info, function(x) x$id, character(1))
+    other_ids <- other_ids[!grepl(hex_pattern, other_ids)]
+    if (length(other_ids) > 0L) {
+      warning(
+        sprintf(
+          paste0(
+            "view_h3_tiles() didn't find a points layer named '%s'. ",
+            "The archive contains non-hex layer(s): %s. ",
+            "If freestile_h3() was called with a custom `point_layer_name`, ",
+            "pass the same value to view_h3_tiles()."
+          ),
+          point_layer_name,
+          paste(sprintf("'%s'", other_ids), collapse = ", ")
+        ),
+        call. = FALSE
+      )
+    }
+  }
+
   # Detect fade vs clean-breaks from overlapping windows
   is_fade <- .h3_detect_fade(hex_layers)
 
@@ -1063,13 +1088,41 @@ view_h3_tiles <- function(
   FALSE
 }
 
-#' Trapezoid fill_opacity envelope for a fade-mode hex layer
+#' Trapezoid (or triangle, for narrow windows) fill_opacity envelope
+#'
+#' Returns a `mapgl::interpolate(...)` expression whose `values` are strictly
+#' increasing zoom inputs and whose `stops` describe a fade-in / hold /
+#' fade-out shape across `[min_zoom, max_zoom]`.
+#'
+#' MapLibre's `interpolate` requires strictly increasing input values. A
+#' naive trapezoid with `min_zoom + overlap` and `max_zoom - overlap` as
+#' the plateau edges collapses (lo_mid == hi_mid) for any window narrower
+#' than `2 * overlap`, producing duplicate inputs that MapLibre silently
+#' rejects. Detect that case and emit a triangle envelope instead.
 #' @noRd
 .h3_fade_opacity <- function(min_zoom, max_zoom, peak, overlap) {
   overlap <- max(1L, as.integer(overlap))
-  lo_mid <- min(min_zoom + overlap, max_zoom)
-  hi_mid <- max(max_zoom - overlap, min_zoom)
-  if (hi_mid < lo_mid) hi_mid <- lo_mid
+  span <- max_zoom - min_zoom
+  if (span <= 0) {
+    # Degenerate single-zoom window — nothing to fade across; hold peak.
+    return(peak)
+  }
+
+  lo_mid <- min_zoom + overlap
+  hi_mid <- max_zoom - overlap
+
+  if (hi_mid <= lo_mid) {
+    # Window too narrow for both fade-in and fade-out at the requested
+    # overlap. Use a triangle envelope peaking at the window center —
+    # strictly increasing inputs are guaranteed by the +/- 0.5 around mid.
+    mid <- (min_zoom + max_zoom) / 2
+    return(mapgl::interpolate(
+      property = "zoom",
+      values = c(min_zoom, mid, max_zoom),
+      stops = c(0, peak, 0)
+    ))
+  }
+
   mapgl::interpolate(
     property = "zoom",
     values = c(min_zoom, lo_mid, hi_mid, max_zoom),
