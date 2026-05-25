@@ -416,6 +416,133 @@ test_that("invalid agg specification errors", {
   )
 })
 
+test_that("SQL input with EPSG:3857 source_crs preserves x/y axis order", {
+  skip_if_no_h3()
+
+  # Two points around (-100, 35) and (-95, 40) in WGS84. The corresponding
+  # EPSG:3857 coordinates (computed once and hard-coded; verified via
+  # sf::st_transform).
+  sql <- paste(
+    "SELECT 1 AS id, ST_Point(-11131949.08, 4163881.14)::GEOMETRY AS geometry",
+    "UNION ALL SELECT 2, ST_Point(-10575287.13, 4865942.28)::GEOMETRY"
+  )
+  output <- tempfile(fileext = ".pmtiles")
+  on.exit(unlink(output), add = TRUE)
+
+  freestile_h3(sql, output,
+    source_crs = "EPSG:3857",
+    min_zoom = 0L, max_zoom = 4L, base_zoom = 3L,
+    quiet = TRUE
+  )
+
+  meta <- pmtiles_metadata(output)
+  # Bounds should land in roughly the right neighborhood. Coarse H3 hexes
+  # extend several degrees past their constituent points, so we just verify
+  # the bbox is in the correct geographic ballpark. If axis order were
+  # swapped, the bounds would land somewhere absurd (e.g. lat > 70 or lon
+  # outside [-180, 0]).
+  expect_gt(meta$min_longitude, -115)
+  expect_lt(meta$max_longitude, -85)
+  expect_gt(meta$min_latitude, 25)
+  expect_lt(meta$max_latitude, 50)
+})
+
+test_that("sf input with no attribute columns succeeds (regression)", {
+  skip_if_no_h3()
+
+  pts <- .make_points(n = 200L)
+  pts_geom_only <- sf::st_sf(geometry = sf::st_geometry(pts))
+  expect_equal(ncol(sf::st_drop_geometry(pts_geom_only)), 0L)
+
+  output <- tempfile(fileext = ".pmtiles")
+  on.exit(unlink(output), add = TRUE)
+
+  expect_no_error(
+    freestile_h3(
+      pts_geom_only, output,
+      min_zoom = 2L, max_zoom = 5L, base_zoom = 4L,
+      quiet = TRUE
+    )
+  )
+  expect_true(file.exists(output))
+  expect_gt(file.info(output)$size, 0L)
+})
+
+test_that("custom hex_layer_prefix round-trips through view_h3_tiles()", {
+  skip_if_no_h3()
+  skip_if_not_installed("mapgl")
+  skip_if_not_installed("httpuv")
+
+  pts <- .make_points(n = 500L)
+  output <- tempfile(fileext = ".pmtiles")
+  on.exit({
+    unlink(output)
+    try(stop_server(), silent = TRUE)
+  }, add = TRUE)
+
+  freestile_h3(
+    pts, output,
+    hex_layer_prefix = "my_h3",      # contains underscore on purpose
+    point_layer_name = "raw_points",
+    min_zoom = 2L, max_zoom = 5L, base_zoom = 4L,
+    quiet = TRUE
+  )
+
+  meta <- pmtiles_metadata(output)
+  layer_ids <- vapply(meta$metadata$vector_layers, function(x) x$id, character(1))
+  expect_true(any(grepl("^my_h3_r\\d{2}$", layer_ids)))
+  expect_true("raw_points" %in% layer_ids)
+
+  m <- view_h3_tiles(output,
+    agg_column = "count",
+    stops = list(values = c(1, 10, 100),
+                 colors = c("#fef0d9", "#fdcc8a", "#d7301f")),
+    hex_layer_prefix = "my_h3",
+    point_layer_name = "raw_points",
+    port = 8284
+  )
+  expect_s3_class(m, "htmlwidget")
+
+  # Confirm the style has at least one hex fill layer and the raw-points
+  # circle layer — i.e. view_h3_tiles() found them under the custom names.
+  style_layer_ids <- vapply(m$x$layers, function(l) l$id %||% "", character(1))
+  expect_true(any(grepl("^hex-my_h3_r\\d{2}$", style_layer_ids)))
+  expect_true(any(grepl("^points-raw_points$", style_layer_ids)))
+})
+
+test_that("view_h3_tiles() emits non-empty mapgl style zoom intervals", {
+  skip_if_no_h3()
+  skip_if_not_installed("mapgl")
+  skip_if_not_installed("httpuv")
+
+  pts <- .make_points(n = 500L)
+  output <- tempfile(fileext = ".pmtiles")
+  on.exit({
+    unlink(output)
+    try(stop_server(), silent = TRUE)
+  }, add = TRUE)
+
+  freestile_h3(
+    pts, output,
+    min_zoom = 2L, max_zoom = 6L, base_zoom = 5L,
+    quiet = TRUE
+  )
+
+  m <- view_h3_tiles(output, agg_column = "count",
+    stops = list(values = c(1, 10, 100),
+                 colors = c("#fef0d9", "#fdcc8a", "#d7301f")),
+    port = 8285)
+
+  # Every style layer with both minzoom/maxzoom must satisfy
+  # maxzoom > minzoom (MapLibre: maxzoom is exclusive, so equal -> never
+  # visible). This is the regression for the off-by-one fix.
+  for (lyr in m$x$layers) {
+    if (!is.null(lyr$minzoom) && !is.null(lyr$maxzoom)) {
+      expect_gt(lyr$maxzoom, lyr$minzoom)
+    }
+  }
+})
+
 test_that("view_h3_tiles() smoke test builds a mapgl map", {
   skip_if_no_h3()
   skip_if_not_installed("mapgl")

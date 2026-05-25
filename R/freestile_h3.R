@@ -204,6 +204,12 @@ freestile_h3 <- function(
   points_min_zoom <- if (fade) max(min_zoom, base_zoom - fade_overlap) else base_zoom
   points_max_zoom <- max_zoom
   if (points_min_zoom <= points_max_zoom) {
+    # The Rust feature parser requires at least one attribute column. If the
+    # input sf is geometry-only, attach a trivial sequential id so MVT
+    # encoding has something to write.
+    if (ncol(sf::st_drop_geometry(points_sf)) == 0L) {
+      points_sf[["__id"]] <- seq_len(nrow(points_sf))
+    }
     layers[[point_layer_name]] <- freestile_layer(
       points_sf,
       min_zoom = points_min_zoom,
@@ -286,6 +292,8 @@ view_h3_tiles <- function(
     point_color = "#0868ac",
     point_radius = NULL,
     background_style = NULL,
+    hex_layer_prefix = "h3",
+    point_layer_name = "points",
     port = 8080
 ) {
   if (!requireNamespace("mapgl", quietly = TRUE)) {
@@ -307,7 +315,9 @@ view_h3_tiles <- function(
     stop("No vector layers found in PMTiles metadata.", call. = FALSE)
   }
 
-  parsed <- .h3_parse_layers_metadata(layers_info)
+  parsed <- .h3_parse_layers_metadata(layers_info,
+    hex_layer_prefix = hex_layer_prefix,
+    point_layer_name = point_layer_name)
   hex_layers <- parsed$hex_layers
   point_layer <- parsed$point_layer
 
@@ -392,6 +402,9 @@ view_h3_tiles <- function(
     outline_alpha <- max(0.1, 0.6 - (i - 1L) * 0.1)
     fill_outline_color <- sprintf("rgba(8, 64, 129, %0.2f)", outline_alpha)
 
+    # MapLibre style `maxzoom` is exclusive ("hidden at zoom >= maxzoom"),
+    # but PMTiles vector_layer `maxzoom` is inclusive. Shift by +1 so the
+    # layer is actually visible at its top zoom.
     args <- list(
       map = m,
       id = sprintf("hex-%s", li$id),
@@ -401,7 +414,7 @@ view_h3_tiles <- function(
       fill_opacity = fill_opacity,
       fill_outline_color = fill_outline_color,
       min_zoom = li$min_zoom,
-      max_zoom = li$max_zoom
+      max_zoom = li$max_zoom + 1L
     )
     m <- do.call(mapgl::add_fill_layer, args)
   }
@@ -441,7 +454,8 @@ view_h3_tiles <- function(
       circle_stroke_color = "#ffffff",
       circle_stroke_width = 1,
       min_zoom = point_layer$min_zoom,
-      max_zoom = point_layer$max_zoom
+      # See comment above hex layer: maxzoom is exclusive in MapLibre style.
+      max_zoom = point_layer$max_zoom + 1L
     )
   }
 
@@ -841,7 +855,10 @@ view_h3_tiles <- function(
     geom_select <- if (identical(resolved_crs, "EPSG:4326")) {
       sprintf("\"%s\" AS geom", geom_col_name)
     } else {
-      sprintf("ST_Transform(\"%s\", '%s', 'EPSG:4326') AS geom",
+      # always_xy = TRUE: force lon/lat (x,y) axis order regardless of CRS
+      # authority axis metadata. Without this, e.g. EPSG:3857 round-trips as
+      # (lat, lon) and bins land at the wrong hex.
+      sprintf("ST_Transform(\"%s\", '%s', 'EPSG:4326', TRUE) AS geom",
         geom_col_name, resolved_crs)
     }
     if (identical(geom_col_name, "geom")) {
@@ -957,29 +974,33 @@ view_h3_tiles <- function(
 }
 
 #' Inspect PMTiles vector_layers metadata for h3 layers + points layer
+#'
+#' Uses the caller-supplied `hex_layer_prefix` / `point_layer_name` so it
+#' matches whatever names `freestile_h3()` actually wrote (the prefix is
+#' user-controllable and may contain regex-special characters).
 #' @noRd
-.h3_parse_layers_metadata <- function(layers_info) {
+.h3_parse_layers_metadata <- function(layers_info,
+                                      hex_layer_prefix = "h3",
+                                      point_layer_name = "points") {
+  hex_pattern <- paste0("^", .h3_escape_regex(hex_layer_prefix), "_r\\d{2}$")
   hex_layers <- list()
   point_layer <- NULL
   for (li in layers_info) {
     id <- li$id
-    if (grepl("^[A-Za-z0-9]+_r\\d{2}$", id)) {
+    if (grepl(hex_pattern, id)) {
       hex_layers[[length(hex_layers) + 1L]] <- list(
         id = id,
         min_zoom = li$minzoom %||% li$min_zoom %||% 0L,
         max_zoom = li$maxzoom %||% li$max_zoom %||% 22L,
         fields = li$fields
       )
-    } else {
-      # First non-hex layer is treated as the points layer.
-      if (is.null(point_layer)) {
-        point_layer <- list(
-          id = id,
-          min_zoom = li$minzoom %||% li$min_zoom %||% 0L,
-          max_zoom = li$maxzoom %||% li$max_zoom %||% 22L,
-          fields = li$fields
-        )
-      }
+    } else if (identical(id, point_layer_name)) {
+      point_layer <- list(
+        id = id,
+        min_zoom = li$minzoom %||% li$min_zoom %||% 0L,
+        max_zoom = li$maxzoom %||% li$max_zoom %||% 22L,
+        fields = li$fields
+      )
     }
   }
 
@@ -1007,6 +1028,12 @@ view_h3_tiles <- function(
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
+
+#' Escape regex metacharacters in an arbitrary user string
+#' @noRd
+.h3_escape_regex <- function(s) {
+  gsub("([\\.|()\\[\\]{}^$*+?\\\\])", "\\\\\\1", s, perl = TRUE)
+}
 
 #' Decide whether the archive is using fade (overlapping zoom windows)
 #' @noRd
