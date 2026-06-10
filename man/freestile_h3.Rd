@@ -110,6 +110,26 @@ data is written to DuckDB via a temporary Parquet (or \code{dbWriteTable})
 roundtrip; with character SQL input, the user query is wrapped in a
 temporary view inside DuckDB.
 }
+\section{Point volume at \code{base_zoom}}{
+
+The raw-point layer is encoded without thinning: every input point is
+written to every tile that contains it from \code{base_zoom} up (and from
+\code{base_zoom - fade_overlap} when \code{fade = TRUE}). For very large inputs the
+tiles at the first point zoom can get heavy. Raising \code{base_zoom} defers
+points to higher zooms, where each tile covers less area and so holds
+fewer points. Per-layer feature dropping for the points layer is on the
+roadmap.
+}
+
+\section{Antimeridian and polar cells}{
+
+Hexagons that cross the antimeridian are split at +/-180 degrees so they
+render correctly on both sides of the dateline instead of as
+world-spanning slivers. The rare cells that contain a pole receive the
+same split and render approximately (the polygon edge follows the cell
+boundary vertices, so the polar cap itself is not filled).
+}
+
 \examples{
 \dontrun{
 library(sf)

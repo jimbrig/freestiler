@@ -664,3 +664,117 @@ test_that("view_h3_tiles() smoke test builds a mapgl map", {
     port = 8281)
   expect_s3_class(m, "htmlwidget")
 })
+
+test_that(".h3_split_antimeridian() splits dateline-crossing hexes", {
+  skip_if_not_installed("sf")
+
+  # Real boundary of H3 cell 827eb7fffffffff (res 2, straddles +/-180).
+  crossing_wkt <- paste0(
+    "POLYGON ((179.866311 1.855493, 179.180049 0.659388, ",
+    "179.839797 -0.719798, -178.798236 -0.936164, -178.078803 0.254874, ",
+    "-178.754302 1.667852, 179.866311 1.855493))"
+  )
+  normal_wkt <- paste0(
+    "POLYGON ((0 0, 1 0, 1.5 0.8, 1 1.6, 0 1.6, -0.5 0.8, 0 0))"
+  )
+  hex_sf <- sf::st_sf(
+    h3_id = c("a", "b"),
+    count = c(10, 20),
+    geometry = sf::st_as_sfc(c(crossing_wkt, normal_wkt), crs = 4326)
+  )
+
+  fixed <- .h3_split_antimeridian(hex_sf)
+
+  # Attributes untouched, geometry normalized to MULTIPOLYGON.
+  expect_equal(fixed$h3_id, hex_sf$h3_id)
+  expect_equal(fixed$count, hex_sf$count)
+  expect_true(all(sf::st_geometry_type(fixed) == "MULTIPOLYGON"))
+
+  # The crossing hex is split into pieces, none of which spans the world.
+  split_parts <- sf::st_cast(sf::st_geometry(fixed)[1L], "POLYGON")
+  expect_gte(length(split_parts), 2L)
+  for (part in split_parts) {
+    bb <- sf::st_bbox(sf::st_sfc(part, crs = 4326))
+    expect_lt(bb["xmax"] - bb["xmin"], 180)
+  }
+
+  # The normal hex is geometrically unchanged.
+  expect_true(sf::st_equals(
+    sf::st_geometry(fixed)[2L],
+    sf::st_geometry(hex_sf)[2L],
+    sparse = FALSE
+  )[1L, 1L])
+})
+
+test_that(".h3_split_antimeridian() is a no-op away from the dateline", {
+  skip_if_not_installed("sf")
+
+  hex_sf <- sf::st_sf(
+    count = 5,
+    geometry = sf::st_as_sfc(
+      "POLYGON ((-100 40, -99 40, -98.5 40.8, -99 41.6, -100 41.6, -100.5 40.8, -100 40))",
+      crs = 4326
+    )
+  )
+  fixed <- .h3_split_antimeridian(hex_sf)
+  expect_identical(
+    sf::st_as_text(sf::st_geometry(fixed)),
+    sf::st_as_text(sf::st_geometry(hex_sf))
+  )
+})
+
+test_that("freestile_h3() handles points straddling the antimeridian", {
+  skip_if_no_h3()
+
+  set.seed(42)
+  pts <- sf::st_as_sf(
+    data.frame(
+      x = c(stats::runif(100, 179.2, 179.99), stats::runif(100, -179.99, -179.2)),
+      y = stats::runif(200, -5, 5)
+    ),
+    coords = c("x", "y"),
+    crs = 4326
+  )
+  output <- tempfile(fileext = ".pmtiles")
+  on.exit(unlink(output), add = TRUE)
+
+  freestile_h3(
+    pts, output,
+    min_zoom = 0L, max_zoom = 6L, base_zoom = 5L,
+    quiet = TRUE
+  )
+  expect_true(file.exists(output))
+  expect_true(file.info(output)$size > 0)
+})
+
+test_that(".h3_parse_agg() escapes double quotes in identifiers", {
+  spec <- .h3_parse_agg(list(`avg"x` = c("mean", 'po"p')))
+  expect_match(spec$select_clause, 'AVG("po""p") AS "avg""x"', fixed = TRUE)
+  expect_identical(spec$outer_select, '"avg""x"')
+})
+
+test_that("view_h3_tiles() rejects unsorted stops$values", {
+  skip_if_no_h3()
+  skip_if_not_installed("mapgl")
+  skip_if_not_installed("httpuv")
+
+  pts <- .make_points(n = 200L)
+  output <- tempfile(fileext = ".pmtiles")
+  on.exit({
+    unlink(output)
+    try(stop_server(), silent = TRUE)
+  }, add = TRUE)
+
+  freestile_h3(
+    pts, output,
+    min_zoom = 2L, max_zoom = 5L, base_zoom = 4L,
+    quiet = TRUE
+  )
+
+  expect_error(
+    view_h3_tiles(output, agg_column = "count",
+      stops = list(values = c(100, 1, 10), colors = c("#000", "#888", "#fff")),
+      port = 8282),
+    "strictly increasing"
+  )
+})

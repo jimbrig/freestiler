@@ -12,6 +12,8 @@
 * `view_h3_tiles()` is a companion viewer that auto-styles a `freestile_h3()`
   archive in `mapgl`, detecting clean-break vs cross-fade mode from the
   PMTiles metadata.
+* Hexagons that cross the antimeridian are split at +/-180 degrees rather
+  than rendering as world-spanning slivers.
 * See `vignette("h3-hexagonal-binning")` for a walkthrough.
 
 # freestiler 0.1.7

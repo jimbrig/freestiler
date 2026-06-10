@@ -20,6 +20,22 @@
 #' roundtrip; with character SQL input, the user query is wrapped in a
 #' temporary view inside DuckDB.
 #'
+#' @section Point volume at `base_zoom`:
+#' The raw-point layer is encoded without thinning: every input point is
+#' written to every tile that contains it from `base_zoom` up (and from
+#' `base_zoom - fade_overlap` when `fade = TRUE`). For very large inputs the
+#' tiles at the first point zoom can get heavy. Raising `base_zoom` defers
+#' points to higher zooms, where each tile covers less area and so holds
+#' fewer points. Per-layer feature dropping for the points layer is on the
+#' roadmap.
+#'
+#' @section Antimeridian and polar cells:
+#' Hexagons that cross the antimeridian are split at +/-180 degrees so they
+#' render correctly on both sides of the dateline instead of as
+#' world-spanning slivers. The rare cells that contain a pole receive the
+#' same split and render approximately (the polygon edge follows the cell
+#' boundary vertices, so the polar cap itself is not filled).
+#'
 #' @param input An `sf` data frame of POINT geometry, or a character SQL query
 #'   that returns a geometry column when executed against DuckDB. (DuckDB's
 #'   spatial functions such as `ST_Read()` and `read_parquet()` are available.)
@@ -391,6 +407,13 @@ view_h3_tiles <- function(
         call. = FALSE
       )
     }
+    if (is.unsorted(stops$values, strictly = TRUE)) {
+      stop(
+        "`stops$values` must be strictly increasing ",
+        "(MapLibre interpolate expressions require sorted inputs).",
+        call. = FALSE
+      )
+    }
   }
 
   serve_tiles(dirname(input), port = port)
@@ -681,6 +704,12 @@ view_h3_tiles <- function(
   out
 }
 
+#' Quote a SQL identifier, escaping embedded double quotes
+#' @noRd
+.h3_quote_ident <- function(x) {
+  sprintf("\"%s\"", gsub("\"", "\"\"", x, fixed = TRUE))
+}
+
 #' Parse `agg` argument into SQL fragments
 #'
 #' Returns a list with `select_clause` (used inside the GROUP BY CTE) and
@@ -738,7 +767,7 @@ view_h3_tiles <- function(
         if (fn == "count" && col == "*") {
           "COUNT(*)"
         } else {
-          sprintf("%s(\"%s\")", sql_fn, col)
+          sprintf("%s(%s)", sql_fn, .h3_quote_ident(col))
         }
       }, character(1))
       return(list(names = nm, exprs = exprs))
@@ -754,8 +783,7 @@ view_h3_tiles <- function(
   pairs <- to_pairs(agg)
 
   # Quote identifiers for SQL.
-  quoted_names <- vapply(pairs$names, function(n) sprintf("\"%s\"", n),
-    character(1))
+  quoted_names <- vapply(pairs$names, .h3_quote_ident, character(1))
 
   select_clause <- paste(
     paste0(pairs$exprs, " AS ", quoted_names),
@@ -902,18 +930,12 @@ view_h3_tiles <- function(
       sprintf("ST_Transform(\"%s\", '%s', 'EPSG:4326', TRUE) AS geom",
         geom_col_name, resolved_crs)
     }
-    if (identical(geom_col_name, "geom")) {
-      # Need a different exclude name to avoid clashing with the new column.
-      DBI::dbExecute(con, sprintf(
-        "CREATE TEMP VIEW __h3_input AS SELECT * EXCLUDE (\"%s\"), %s FROM __h3_raw",
-        geom_col_name, geom_select
-      ))
-    } else {
-      DBI::dbExecute(con, sprintf(
-        "CREATE TEMP VIEW __h3_input AS SELECT * EXCLUDE (\"%s\"), %s FROM __h3_raw",
-        geom_col_name, geom_select
-      ))
-    }
+    # EXCLUDE drops the source geometry column before the aliased `geom` is
+    # added, so this works whether or not the column is already named "geom".
+    DBI::dbExecute(con, sprintf(
+      "CREATE TEMP VIEW __h3_input AS SELECT * EXCLUDE (\"%s\"), %s FROM __h3_raw",
+      geom_col_name, geom_select
+    ))
 
     # Validate geometry types via a small sample.
     gtypes <- DBI::dbGetQuery(con,
@@ -1011,7 +1033,51 @@ view_h3_tiles <- function(
     agg_spec$outer_select
   )
 
-  .h3_query_to_sf(con, sql)
+  .h3_split_antimeridian(.h3_query_to_sf(con, sql))
+}
+
+#' Split hex polygons that cross the antimeridian
+#'
+#' `h3_cell_to_boundary_wkt()` returns raw cell boundaries: a cell that
+#' crosses the antimeridian has vertex longitudes jumping between ~+180 and
+#' ~-180, which planar tiling renders as a world-spanning sliver. Detect
+#' affected polygons by longitude span, shift their negative longitudes by
+#' +360 so the ring is contiguous, and split at the dateline with
+#' [sf::st_wrap_dateline()]. Cells containing a pole get the same treatment
+#' and render approximately (the polar cap itself is not filled).
+#' @noRd
+.h3_split_antimeridian <- function(hex_sf) {
+  geom <- sf::st_geometry(hex_sf)
+  if (length(geom) == 0L) {
+    return(hex_sf)
+  }
+
+  coords <- sf::st_coordinates(geom)
+  spans <- tapply(coords[, "X"], coords[, "L2"], function(x) max(x) - min(x))
+  crossing <- as.integer(names(spans)[spans > 180])
+  if (length(crossing) == 0L) {
+    return(hex_sf)
+  }
+
+  shifted <- lapply(crossing, function(i) {
+    ring <- unclass(geom[[i]])[[1L]]
+    ring[, 1L] <- ifelse(ring[, 1L] < 0, ring[, 1L] + 360, ring[, 1L])
+    sf::st_polygon(list(ring))
+  })
+  wrapped <- sf::st_wrap_dateline(
+    sf::st_sfc(shifted, crs = sf::st_crs(geom))
+  )
+
+  glist <- unclass(geom)
+  for (k in seq_along(crossing)) {
+    glist[[crossing[k]]] <- wrapped[[k]]
+  }
+  new_geom <- sf::st_cast(
+    sf::st_sfc(glist, crs = sf::st_crs(geom)),
+    "MULTIPOLYGON"
+  )
+  sf::st_geometry(hex_sf) <- new_geom
+  hex_sf
 }
 
 #' Inspect PMTiles vector_layers metadata for h3 layers + points layer
