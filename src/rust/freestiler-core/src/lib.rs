@@ -8,6 +8,7 @@ pub mod file_input;
 pub mod mlt;
 pub mod mvt;
 pub mod pmtiles_writer;
+pub mod quantize;
 pub mod simplify;
 #[cfg(feature = "duckdb")]
 pub mod streaming;

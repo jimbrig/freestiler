@@ -45,6 +45,8 @@ Issues = "https://github.com/walkerke/freestiler/issues"
 
 [project.optional-dependencies]
 test = [
+    "mapbox-vector-tile>=2.0",
+    "pmtiles>=3.2",
     "pyarrow>=14",
     "pytest>=7.0",
 ]
