@@ -690,7 +690,7 @@ view_h3_tiles <- function(
     resolution = runs$values,
     stringsAsFactors = FALSE
   )
-  starts <- cumsum(c(1L, head(runs$lengths, -1L)))
+  starts <- cumsum(c(1L, runs$lengths[-length(runs$lengths)]))
   ends <- cumsum(runs$lengths)
   out$min_zoom <- hex_zooms[starts]
   out$max_zoom <- hex_zooms[ends]
