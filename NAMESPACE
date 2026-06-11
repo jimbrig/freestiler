@@ -2,10 +2,12 @@
 
 export(freestile)
 export(freestile_file)
+export(freestile_h3)
 export(freestile_layer)
 export(freestile_query)
 export(pmtiles_metadata)
 export(serve_tiles)
 export(stop_server)
+export(view_h3_tiles)
 export(view_tiles)
 useDynLib(freestiler, .registration = TRUE)

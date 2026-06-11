@@ -1,3 +1,21 @@
+# freestiler 0.2.0
+
+* `freestile_h3()` is a new function for dynamic hexagonal binning. It
+  aggregates points into H3 hexagons at zoom-appropriate resolutions via
+  DuckDB's H3 community extension and writes a multi-layer `.pmtiles`
+  archive where low zooms show coarse hexes, intermediate zooms show
+  progressively finer hexes, and zooms at or above `base_zoom` show the raw
+  points. Aggregation rules are user-defined SQL expressions
+  (e.g. `c(n = "COUNT(*)", avg_pop = "AVG(pop)")`). Opt-in `fade = TRUE`
+  produces overlapping zoom windows so adjacent hex resolutions can
+  cross-fade visually.
+* `view_h3_tiles()` is a companion viewer that auto-styles a `freestile_h3()`
+  archive in `mapgl`, detecting clean-break vs cross-fade mode from the
+  PMTiles metadata.
+* Hexagons that cross the antimeridian are split at +/-180 degrees rather
+  than rendering as world-spanning slivers.
+* See `vignette("h3-hexagonal-binning")` for a walkthrough.
+
 # freestiler 0.1.7
 
 * Updated the CRAN Rust build path to use a dependency graph compatible with
