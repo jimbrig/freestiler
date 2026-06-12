@@ -5,8 +5,9 @@
   now replaced by a one-pixel square at its centroid instead of being
   dropped, so narrow features stay continuously visible. Ring winding is
   also normalized to the MVT specification (exterior rings positive area,
-  interior rings negative) and zero-area degenerate rings are dropped
-  rather than emitted as invalid polygons.
+  interior rings negative), zero-area degenerate rings are dropped rather
+  than emitted as invalid polygons, and quantization-induced spikes
+  (out-and-back needle vertices) are removed.
 * `freestile_h3()` is a new function for dynamic hexagonal binning. It
   aggregates points into H3 hexagons at zoom-appropriate resolutions via
   DuckDB's H3 community extension and writes a multi-layer `.pmtiles`

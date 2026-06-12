@@ -171,7 +171,42 @@ fn quantize_ring(
         coords.pop();
     }
 
+    remove_spikes(&mut coords);
+
     coords
+}
+
+/// Iteratively remove spikes: vertices whose cyclic neighbors coincide, i.e.
+/// the ring walks out to a point and retraces itself (`A -> B -> A`).
+/// Quantization commonly creates these from narrow appendages, and they make
+/// the ring self-intersecting. Removing a spike tip leaves a consecutive
+/// duplicate pair, which is deduplicated before re-scanning; multi-vertex
+/// needles (`A -> B -> C -> B -> A`) unwind over successive passes. A ring
+/// that is entirely spike degenerates below three vertices and is handled by
+/// the caller (collapse to dot, or drop for interior rings).
+fn remove_spikes(coords: &mut Vec<(i32, i32)>) {
+    loop {
+        if coords.len() < 3 {
+            return;
+        }
+        let n = coords.len();
+        let spike = (0..n).find(|&i| coords[(i + n - 1) % n] == coords[(i + 1) % n]);
+        let Some(tip) = spike else {
+            return;
+        };
+        coords.remove(tip);
+
+        // Removing the tip leaves its two (equal) neighbors adjacent; dedupe
+        // cyclically so the scan above sees a clean ring.
+        let mut i = 0;
+        while coords.len() >= 2 && i < coords.len() {
+            if coords[i] == coords[(i + 1) % coords.len()] {
+                coords.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
 }
 
 /// Twice the signed area of an open ring by the surveyor's formula, computed
@@ -352,6 +387,60 @@ mod tests {
         ]);
         let parts = quantize_multipolygon(&mp, W, S, E, N);
         assert_eq!(parts.len(), 2);
+    }
+
+    #[test]
+    fn needle_spike_is_removed() {
+        // A square with a zero-width needle sticking out of its top edge:
+        // the ring walks out to the needle tip and retraces itself.
+        let poly = polygon![
+            (x: 0.1, y: 0.1),
+            (x: 0.2, y: 0.1),
+            (x: 0.2, y: 0.2),
+            (x: 0.15, y: 0.2),
+            (x: 0.15, y: 0.25),
+            (x: 0.15, y: 0.2),
+            (x: 0.1, y: 0.2),
+            (x: 0.1, y: 0.1),
+        ];
+        let qp = quantize_polygon_or_dot(&poly, W, S, E, N);
+        let tip_y = lat_to_tile_coord(0.25, S, N);
+        assert!(
+            !qp.exterior.iter().any(|&(_, y)| y == tip_y),
+            "needle tip should be removed, got {:?}",
+            qp.exterior
+        );
+        assert_eq!(qp.exterior.len(), 5);
+        assert!(signed_area2(&qp.exterior) > 0);
+    }
+
+    #[test]
+    fn multi_vertex_needle_unwinds_completely() {
+        // The needle has an intermediate vertex (A -> B -> C -> B -> A); spike
+        // removal must unwind it over successive passes.
+        let poly = polygon![
+            (x: 0.1, y: 0.1),
+            (x: 0.2, y: 0.1),
+            (x: 0.2, y: 0.2),
+            (x: 0.15, y: 0.2),
+            (x: 0.15, y: 0.22),
+            (x: 0.15, y: 0.25),
+            (x: 0.15, y: 0.22),
+            (x: 0.15, y: 0.2),
+            (x: 0.1, y: 0.2),
+            (x: 0.1, y: 0.1),
+        ];
+        let qp = quantize_polygon_or_dot(&poly, W, S, E, N);
+        let top_edge_y = lat_to_tile_coord(0.2, S, N);
+        for &(_, y) in &qp.exterior {
+            assert!(
+                y >= top_edge_y.min(lat_to_tile_coord(0.1, S, N))
+                    && y <= top_edge_y.max(lat_to_tile_coord(0.1, S, N)),
+                "needle vertex survived: {:?}",
+                qp.exterior
+            );
+        }
+        assert!(signed_area2(&qp.exterior) > 0);
     }
 
     #[test]
