@@ -58,35 +58,36 @@ jobs:
             manylinux: "2_28"
             duckdb_explicit_platform: "linux_amd64"
             interpreter: "/opt/python/cp314-cp314/bin/python"
-          # Pinned to windows-2025 (VS 2022): windows-latest now resolves to the
-          # VS 2026 image, whose MSVC removed stdext::checked_array_iterator and
-          # breaks the bundled DuckDB build (vendored fmt).
-          - os: windows-2025
+          # Pinned to windows-2022 (VS 2022): both windows-latest and
+          # windows-2025 now resolve to the VS 2026 image, whose MSVC removed
+          # stdext::checked_array_iterator and breaks the bundled DuckDB build
+          # (vendored fmt). Revisit once duckdb-rs supports VS 2026.
+          - os: windows-2022
             python-version: "3.9"
             manylinux: "auto"
             duckdb_explicit_platform: ""
             interpreter: "python"
-          - os: windows-2025
+          - os: windows-2022
             python-version: "3.10"
             manylinux: "auto"
             duckdb_explicit_platform: ""
             interpreter: "python"
-          - os: windows-2025
+          - os: windows-2022
             python-version: "3.11"
             manylinux: "auto"
             duckdb_explicit_platform: ""
             interpreter: "python"
-          - os: windows-2025
+          - os: windows-2022
             python-version: "3.12"
             manylinux: "auto"
             duckdb_explicit_platform: ""
             interpreter: "python"
-          - os: windows-2025
+          - os: windows-2022
             python-version: "3.13"
             manylinux: "auto"
             duckdb_explicit_platform: ""
             interpreter: "python"
-          - os: windows-2025
+          - os: windows-2022
             python-version: "3.14"
             manylinux: "auto"
             duckdb_explicit_platform: ""
