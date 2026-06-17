@@ -64,6 +64,28 @@ freestile_query(
 For very large point tables, use `streaming="always"` and prefer
 `tile_format="mvt"` for maximum viewer compatibility.
 
+### Hexagonal binning
+
+`freestile_h3()` aggregates points into H3 hexagons at zoom-appropriate
+resolutions, writing a multi-layer archive where low zooms show coarse
+hexagons, intermediate zooms show finer ones, and `base_zoom` and above show
+the raw points. It needs the H3 extra (`pip install 'freestiler[h3]'`) for
+DuckDB and the DuckDB H3 community extension.
+
+```python
+from freestiler import freestile_h3
+
+freestile_h3(
+    points,
+    "wind.pmtiles",
+    agg={"n": "COUNT(*)", "avg_mw": "AVG(capacity_mw)"},
+    min_zoom=2, max_zoom=12, base_zoom=10,
+)
+```
+
+`agg` also accepts `(fn, column)` tuples (e.g. `{"n": ("count", "*")}`) if you
+would rather not write SQL.
+
 Performance note:
 
 - `freestile(gdf, ...)` is convenient for GeoDataFrames that already fit comfortably in memory.

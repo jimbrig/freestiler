@@ -110,8 +110,8 @@ def freestile(
         Name for the tile layer. If None, derived from the output filename.
         Only used for single-layer input.
     tile_format : str
-        Tile encoding format: "mlt" (default) for MapLibre Tiles or "mvt"
-        for Mapbox Vector Tiles.
+        Tile encoding format: "mvt" (default) for Mapbox Vector Tiles or "mlt"
+        for MapLibre Tiles.
     min_zoom : int
         Minimum zoom level (default 0).
     max_zoom : int
@@ -379,7 +379,7 @@ def freestile_file(
     layer_name : str, optional
         Name for the tile layer. If None, derived from the output filename.
     tile_format : str
-        Tile encoding format: "mlt" (default) or "mvt".
+        Tile encoding format: "mvt" (default) or "mlt".
     min_zoom : int
         Minimum zoom level (default 0).
     max_zoom : int
@@ -533,7 +533,7 @@ def freestile_query(
     layer_name : str, optional
         Name for the tile layer. If None, derived from the output filename.
     tile_format : str
-        Tile encoding format: "mlt" (default) or "mvt".
+        Tile encoding format: "mvt" (default) or "mlt".
     min_zoom : int
         Minimum zoom level (default 0).
     max_zoom : int
@@ -626,9 +626,14 @@ def freestile_query(
     return output
 
 
+# Imported at the end so h3.py can import freestile/freestile_layer from this
+# partially-initialized module without a circular-import failure.
+from freestiler.h3 import freestile_h3  # noqa: E402
+
 __all__ = [
     "freestile",
     "freestile_file",
+    "freestile_h3",
     "freestile_layer",
     "freestile_query",
     "FreestileLayer",
