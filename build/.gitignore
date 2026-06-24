@@ -1,0 +1,5 @@
+# Ignore everything in this folder (local R libraries, compiled packages,
+# cargo target dirs) but keep the folder and its README tracked.
+*
+!.gitignore
+!README.md

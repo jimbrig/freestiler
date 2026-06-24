@@ -34,5 +34,13 @@ python/nc.dbf
 python/nc.prj
 python/nc.shp
 python/nc.shx
-build/
 src/._vendor
+.positai
+.tmp-lib/
+build_install.log
+.cursor/
+*.Rproj
+.repomixignore
+repomix.config.json
+repomix-output.txt
+tests/testthat/data/*.fgb

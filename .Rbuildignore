@@ -27,3 +27,11 @@
 ^\.tmp-lib$
 ^tools/build_cran\.R$
 ^vignettes$
+^build\.R$
+^\.positai$
+^\.cursor$
+^\.repomixignore$
+^repomix\.config\.json$
+^repomix-output\.txt$
+^build$
+^build_install\.log$

@@ -49,7 +49,10 @@ if (!is_not_cran) {
 
 # when DEBUG env var is present we use `--debug` build
 .profile <- ifelse(is_debug, "", "--release")
-.clean_targets <- ifelse(is_debug, "", "$(TARGET_DIR)")
+# Keep the cargo target dir for debug and local non-CRAN source builds so that
+# re-installs reuse the compiled crates (notably the bundled DuckDB C++, which
+# is expensive to rebuild). CRAN-style builds still clean it to save space.
+.clean_targets <- ifelse(is_debug || is_not_cran, "", "$(TARGET_DIR)")
 
 # We specify this target when building for webR
 webr_target <- "wasm32-unknown-emscripten"

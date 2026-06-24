@@ -3,7 +3,12 @@ TARGET = $(subst 64,x86_64,$(subst 32,i686,$(WIN)))-pc-windows-gnu
 TARGET_DIR = ./rust/target
 LIBDIR = $(TARGET_DIR)/$(TARGET)/@LIBDIR@
 STATLIB = $(LIBDIR)/libfreestiler.a
-PKG_LIBS = -L$(LIBDIR) -lfreestiler -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll -lstdc++ -static-libstdc++
+# System libraries required by the Rust staticlib. The bundled DuckDB C++
+# (libduckdb-sys) needs several Windows libs that Cargo's --print=native-static-libs
+# does not fully report: notably -lrstrtmgr (Restart Manager, used by
+# LocalFileSystem), plus -ldbghelp/-lole32/-lshell32. These are harmless when
+# DuckDB is not compiled in.
+PKG_LIBS = -L$(LIBDIR) -lfreestiler -lrstrtmgr -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll -ldbghelp -lole32 -lshell32 -luser32 -lkernel32 -lstdc++ -static-libstdc++
 
 all: $(SHLIB) rust_clean
 
