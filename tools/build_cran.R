@@ -15,14 +15,14 @@
 
 stopifnot(file.exists("DESCRIPTION"))
 
-vendor_xz  <- "src/rust/vendor.tar.xz"
+vendor_xz <- "src/rust/vendor.tar.xz"
 vendor_bak <- "src/rust/vendor_full.tar.xz.bak"
-core_toml  <- "src/rust/freestiler-core/Cargo.toml"
-core_bak   <- "src/rust/freestiler-core/Cargo.toml.bak"
-root_toml  <- "src/rust/Cargo.toml"
-root_bak   <- "src/rust/Cargo.toml.bak"
-root_lock  <- "src/rust/Cargo.lock"
-lock_bak   <- "src/rust/Cargo.lock.bak"
+core_toml <- "src/rust/freestiler-core/Cargo.toml"
+core_bak <- "src/rust/freestiler-core/Cargo.toml.bak"
+root_toml <- "src/rust/Cargo.toml"
+root_bak <- "src/rust/Cargo.toml.bak"
+root_lock <- "src/rust/Cargo.lock"
+lock_bak <- "src/rust/Cargo.lock.bak"
 
 restore <- function() {
   unlink("src/vendor", recursive = TRUE)
@@ -97,7 +97,9 @@ writeLines(cran_toml, core_toml)
 
 # Strip optional feature forwarding from root Cargo.toml
 root_lines <- readLines(root_toml)
-root_lines <- root_lines[!grepl("^(geoparquet|duckdb|fastpfor|fsst) =", root_lines)]
+root_lines <- root_lines[
+  !grepl("^(geoparquet|duckdb|fastpfor|fsst) =", root_lines)
+]
 writeLines(root_lines, root_toml)
 
 # --- Step 3: Re-vendor with stripped deps ---
@@ -106,8 +108,10 @@ message("=== Re-vendoring (no optional deps) ===")
 unlink("src/vendor", recursive = TRUE)
 
 # Regenerate lockfile to match stripped Cargo.toml (rextendr uses --locked)
-system2("cargo", c("generate-lockfile",
-  "--manifest-path", "src/rust/Cargo.toml"))
+system2(
+  "cargo",
+  c("generate-lockfile", "--manifest-path", "src/rust/Cargo.toml")
+)
 
 # Cargo >= 1.78 can write lockfile v4, which Cargo 1.77.2 cannot parse.
 # The CRAN dependency graph does not require v4-specific fields.
@@ -115,7 +119,7 @@ lock_lines <- readLines(root_lock)
 lock_lines <- sub("^version = 4$", "version = 3", lock_lines)
 writeLines(lock_lines, root_lock)
 
-rextendr::vendor_pkgs()
+rextendr::vendor_crates()
 
 new_size <- file.info(vendor_xz)$size / 1e6
 message(sprintf("=== CRAN vendor tarball: %.1f MB ===", new_size))
@@ -128,7 +132,11 @@ unlink("src/vendor", recursive = TRUE)
 pkg_tar <- devtools::build()
 
 pkg_size <- file.info(pkg_tar)$size / 1e6
-message(sprintf("\n=== Done! CRAN tarball: %s (%.1f MB) ===", pkg_tar, pkg_size))
+message(sprintf(
+  "\n=== Done! CRAN tarball: %s (%.1f MB) ===",
+  pkg_tar,
+  pkg_size
+))
 message("Submit at: https://cran.r-project.org/submit.html")
 
 # --- Step 5: Restore everything ---
