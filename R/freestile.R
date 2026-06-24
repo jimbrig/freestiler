@@ -431,18 +431,35 @@ freestile_file <- function(
     }
 
     if (backend == "r") {
+      is_parquet <- grepl("\\.(parquet|pq|geoparquet)$", input, ignore.case = TRUE)
+
       # Detect source CRS from file metadata
       source_crs <- .duckdb_detect_file_crs(input)
       if (is.null(source_crs) || !nzchar(source_crs)) {
-        stop(
-          "Could not detect CRS from file metadata via DuckDB ST_Read_Meta(). ",
-          "Use a file with embedded CRS metadata, supply the data through ",
-          "`freestile()` as an sf object, or use the Rust DuckDB backend.",
-          call. = FALSE
-        )
+        if (is_parquet) {
+          # GeoParquet without resolvable CRS metadata is lon/lat WGS84
+          # (OGC:CRS84) per the GeoParquet spec, matching the Rust engine.
+          warning(
+            "Could not resolve CRS from GeoParquet metadata; ",
+            "assuming WGS84 (EPSG:4326).",
+            call. = FALSE
+          )
+          source_crs <- "EPSG:4326"
+        } else {
+          stop(
+            "Could not detect CRS from file metadata via DuckDB ST_Read_Meta(). ",
+            "Use a file with embedded CRS metadata, supply the data through ",
+            "`freestile()` as an sf object, or use the Rust DuckDB backend.",
+            call. = FALSE
+          )
+        }
       }
 
-      sql <- sprintf("SELECT * FROM ST_Read('%s')", gsub("'", "''", input))
+      # DuckDB's bundled GDAL has no Parquet driver, so ST_Read() cannot open
+      # GeoParquet. read_parquet() reads it natively and resolves the CRS onto
+      # the GEOMETRY column; ST_Read() handles OGR formats (GPKG, FGB, ...).
+      reader <- if (is_parquet) "read_parquet" else "ST_Read"
+      sql <- sprintf("SELECT * FROM %s('%s')", reader, gsub("'", "''", input))
       sf_result <- .r_duckdb_query_to_sf(sql, db_path = NULL,
         source_crs = source_crs)
       return(freestile(
@@ -864,34 +881,83 @@ freestile_query <- function(
   sf::st_sf(df, geometry = geom)
 }
 
-#' Detect CRS from a spatial file via DuckDB ST_Read_Meta
+#' Detect CRS from a spatial file via DuckDB
 #'
-#' Opens a temporary DuckDB connection, loads the spatial extension, and
-#' extracts the CRS authority string from the file's metadata. Returns
-#' NULL on any failure.
+#' Resolves the source CRS authority string (e.g. "EPSG:4267") from a spatial
+#' file's metadata. GeoParquet is handled separately from OGR-readable formats
+#' because DuckDB reads Parquet natively (its bundled GDAL has no Parquet
+#' driver) and resolves the embedded CRS onto the GEOMETRY column type. Returns
+#' NULL when no CRS can be determined.
 #'
 #' @param file_path Character. Path to the spatial file.
 #' @return Character CRS string (e.g. "EPSG:4267") or NULL.
 #' @noRd
 .duckdb_detect_file_crs <- function(file_path) {
+  esc <- gsub("'", "''", file_path)
+  is_parquet <- grepl("\\.(parquet|pq|geoparquet)$", file_path, ignore.case = TRUE)
+
+  # GeoParquet: read_parquet() resolves the embedded CRS onto the GEOMETRY
+  # column type (e.g. GEOMETRY('EPSG:4326')), covering both the GeoParquet 1.x
+  # 'geo' metadata and the GeoParquet 2.0 native GEOMETRY encodings. This is
+  # more reliable than ST_Read_Meta(), which returns no rows for Parquet.
+  if (is_parquet) {
+    crs <- tryCatch({
+      con <- DBI::dbConnect(duckdb::duckdb())
+      on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+      DBI::dbExecute(con, "INSTALL spatial; LOAD spatial;")
+      desc <- DBI::dbGetQuery(
+        con,
+        sprintf("DESCRIBE SELECT * FROM read_parquet('%s')", esc)
+      )
+      geom_types <- desc$column_type[
+        grepl("^GEOMETRY", desc$column_type, ignore.case = TRUE)
+      ]
+      if (length(geom_types) == 0L) {
+        NULL
+      } else {
+        auth <- regmatches(
+          geom_types[1L],
+          regexpr("[A-Za-z]+:[0-9]+", geom_types[1L])
+        )
+        if (length(auth) == 1L && nzchar(auth)) {
+          auth
+        } else {
+          # GEOMETRY without an authority annotation: GeoParquet with no
+          # explicit CRS is lon/lat WGS84 (OGC:CRS84) per spec.
+          "EPSG:4326"
+        }
+      }
+    }, error = function(e) NULL)
+    if (!is.null(crs) && nzchar(crs)) {
+      return(crs)
+    }
+  }
+
+  # OGR-readable formats (GPKG, FlatGeobuf, Shapefile, ...): pull the authority
+  # via ST_Read_Meta(), flattening the nested struct in SQL so the result is
+  # scalar columns rather than a fragile nested R list.
   tryCatch({
     con <- DBI::dbConnect(duckdb::duckdb())
     on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
     DBI::dbExecute(con, "INSTALL spatial; LOAD spatial;")
-
-    meta <- DBI::dbGetQuery(
+    res <- DBI::dbGetQuery(
       con,
-      sprintf("SELECT * FROM ST_Read_Meta('%s')", gsub("'", "''", file_path))
+      sprintf(
+        "SELECT layers[1].geometry_fields[1].crs.auth_name AS auth_name,
+                layers[1].geometry_fields[1].crs.auth_code AS auth_code
+         FROM ST_Read_Meta('%s')",
+        esc
+      )
     )
-    crs_df <- meta$layers[[1]]$geometry_fields[[1]]$crs
-    auth_name <- crs_df[["auth_name"]]
-    auth_code <- crs_df[["auth_code"]]
-    if (!is.null(auth_name) && nchar(auth_name) > 0L &&
-        !is.null(auth_code) && nchar(auth_code) > 0L) {
-      paste0(auth_name, ":", auth_code)
-    } else {
-      NULL
+    if (nrow(res) >= 1L) {
+      auth_name <- res$auth_name[1L]
+      auth_code <- as.character(res$auth_code[1L])
+      if (!is.na(auth_name) && nzchar(auth_name) &&
+          !is.na(auth_code) && nzchar(auth_code)) {
+        return(paste0(auth_name, ":", auth_code))
+      }
     }
+    NULL
   }, error = function(e) NULL)
 }
 

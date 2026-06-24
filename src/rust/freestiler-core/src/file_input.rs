@@ -405,10 +405,22 @@ mod duckdb_impl {
         min_zoom: u8,
         max_zoom: u8,
     ) -> Result<Vec<LayerData>, String> {
-        let sql = format!(
-            "SELECT * FROM ST_Read('{}', open_options=['FLATTEN_NESTED_ATTRIBUTES=YES'])",
-            path.replace('\'', "''")
-        );
+        let escaped = path.replace('\'', "''");
+        let lower = path.to_ascii_lowercase();
+        let is_parquet = lower.ends_with(".parquet")
+            || lower.ends_with(".pq")
+            || lower.ends_with(".geoparquet");
+        // DuckDB reads Parquet natively and decodes GeoParquet geometry (and its
+        // CRS) onto the GEOMETRY type. Its bundled GDAL has no Parquet driver, so
+        // ST_Read() cannot open Parquet; ST_Read() handles the OGR formats.
+        let sql = if is_parquet {
+            format!("SELECT * FROM read_parquet('{}')", escaped)
+        } else {
+            format!(
+                "SELECT * FROM ST_Read('{}', open_options=['FLATTEN_NESTED_ATTRIBUTES=YES'])",
+                escaped
+            )
+        };
         duckdb_query_to_layers(None, &sql, layer_name, min_zoom, max_zoom)
     }
 
@@ -465,25 +477,29 @@ mod duckdb_impl {
             "No geometry column found in query result. Ensure your query returns a GEOMETRY column.".to_string()
         })?;
 
-        let wkb_col_idx = all_columns.len();
-
         let geom_col_lower = geom_col_name.to_lowercase();
-        let skip_cols: Vec<String> = vec![geom_col_lower, "__wkb".into()];
         let mut prop_names: Vec<String> = Vec::new();
         let mut prop_col_indices: Vec<usize> = Vec::new();
         let mut prop_types: Vec<String> = Vec::new();
         let mut prop_value_kinds: Vec<DuckDbValueKind> = Vec::new();
 
-        for (i, (name, dtype)) in all_columns.iter().enumerate() {
-            let name_lower = name.to_lowercase();
-            if skip_cols.contains(&name_lower) {
+        // The geometry column is dropped from the projection (SELECT * EXCLUDE)
+        // and replaced by a trailing __wkb blob: DuckDB's native GEOMETRY type
+        // (e.g. from read_parquet) is not materializable by duckdb-rs, but
+        // ST_AsWKB(...) is. Track output positions so the property column
+        // indices line up with the EXCLUDE-d projection.
+        let mut out_idx = 0usize;
+        for (name, dtype) in all_columns.iter() {
+            if name.to_lowercase() == geom_col_lower {
                 continue;
             }
             prop_names.push(name.clone());
-            prop_col_indices.push(i);
+            prop_col_indices.push(out_idx);
             prop_types.push(duckdb_type_to_property_type(dtype));
             prop_value_kinds.push(duckdb_type_to_value_kind(dtype));
+            out_idx += 1;
         }
+        let wkb_col_idx = out_idx;
 
         // Detect source CRS via ST_SRID on the first non-null geometry
         let srid_sql = format!(
@@ -508,7 +524,10 @@ mod duckdb_impl {
             }
         };
 
-        let wkb_sql = format!("SELECT *, {} AS __wkb FROM ({}) AS __t", geom_expr, sql);
+        let wkb_sql = format!(
+            "SELECT * EXCLUDE (\"{}\"), {} AS __wkb FROM ({}) AS __t",
+            geom_col_name, geom_expr, sql
+        );
 
         let mut stmt = conn
             .prepare(&wkb_sql)
