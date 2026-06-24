@@ -108,7 +108,7 @@ My recommendation for Python users: try the Positron IDE, which supports both Py
 |---------|---|--------|
 | Input type | sf data frame | GeoDataFrame |
 | Multi-layer | Named list | Dict |
-| Default format | `"mlt"` | `"mlt"` |
+| Default format | `"mvt"` | `"mvt"` |
 | Zoom range | `min_zoom = 0, max_zoom = 14` | `min_zoom=0, max_zoom=14` |
 | Feature dropping | `drop_rate = 2.5` | `drop_rate=2.5` |
 | Point clustering | `cluster_distance = 50` | `cluster_distance=50` |

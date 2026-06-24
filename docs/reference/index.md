@@ -12,6 +12,8 @@ Create PMTiles archives from spatial data
   : Create vector tiles from a DuckDB SQL query
 - [`freestile_layer()`](https://walker-data.com/freestiler/reference/freestile_layer.md)
   : Create a layer specification with per-layer zoom range
+- [`freestile_h3()`](https://walker-data.com/freestiler/reference/freestile_h3.md)
+  : Create vector tiles with dynamic H3 hexagonal binning
 
 ## Viewing Tiles
 
@@ -23,3 +25,5 @@ Serve and view PMTiles locally
   : Stop a local tile server
 - [`view_tiles()`](https://walker-data.com/freestiler/reference/view_tiles.md)
   : Quickly view a PMTiles file on an interactive map
+- [`view_h3_tiles()`](https://walker-data.com/freestiler/reference/view_h3_tiles.md)
+  : View an H3 hexagonal-binning PMTiles archive

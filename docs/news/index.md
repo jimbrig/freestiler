@@ -1,5 +1,47 @@
 # Changelog
 
+## freestiler 0.2.0
+
+CRAN release: 2026-06-24
+
+- Thin (sub-pixel-width) polygons no longer flicker in and out across
+  zoom levels
+  ([\#13](https://github.com/walkerke/freestiler/issues/13)). A polygon
+  that collapses on a tile’s integer pixel grid is now replaced by a
+  one-pixel square at its centroid instead of being dropped, so narrow
+  features stay continuously visible. Ring winding is also normalized to
+  the MVT specification (exterior rings positive area, interior rings
+  negative), zero-area degenerate rings are dropped rather than emitted
+  as invalid polygons, and quantization-induced spikes (out-and-back
+  needle vertices) are removed.
+- [`freestile_h3()`](https://walker-data.com/freestiler/reference/freestile_h3.md)
+  is a new function for dynamic hexagonal binning. It aggregates points
+  into H3 hexagons at zoom-appropriate resolutions via DuckDB’s H3
+  community extension and writes a multi-layer `.pmtiles` archive where
+  low zooms show coarse hexes, intermediate zooms show progressively
+  finer hexes, and zooms at or above `base_zoom` show the raw points.
+  Aggregation rules are user-defined SQL expressions
+  (e.g. `c(n = "COUNT(*)", avg_pop = "AVG(pop)")`). Opt-in `fade = TRUE`
+  produces overlapping zoom windows so adjacent hex resolutions can
+  cross-fade visually.
+- [`view_h3_tiles()`](https://walker-data.com/freestiler/reference/view_h3_tiles.md)
+  is a companion viewer that auto-styles a
+  [`freestile_h3()`](https://walker-data.com/freestiler/reference/freestile_h3.md)
+  archive in `mapgl`, detecting clean-break vs cross-fade mode from the
+  PMTiles metadata.
+- Hexagons that cross the antimeridian are split at +/-180 degrees
+  rather than rendering as world-spanning slivers.
+- See
+  [`vignette("h3-hexagonal-binning")`](https://walker-data.com/freestiler/articles/h3-hexagonal-binning.md)
+  for a walkthrough.
+
+## freestiler 0.1.7
+
+CRAN release: 2026-05-12
+
+- Updated the CRAN Rust build path to use a dependency graph compatible
+  with rustc/cargo 1.77.2.
+
 ## freestiler 0.1.0
 
 Initial release.

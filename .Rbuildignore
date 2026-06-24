@@ -27,3 +27,4 @@
 ^\.tmp-lib$
 ^tools/build_cran\.R$
 ^vignettes$
+^dev$

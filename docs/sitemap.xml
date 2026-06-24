@@ -2,9 +2,8 @@
 <url><loc>https://walker-data.com/freestiler/404.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/LICENSE-text.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/LICENSE.html</loc></url>
-<url><loc>https://walker-data.com/freestiler/_CLAUDE.html</loc></url>
-<url><loc>https://walker-data.com/freestiler/_PYTHON_HANDOFF.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/articles/getting-started.html</loc></url>
+<url><loc>https://walker-data.com/freestiler/articles/h3-hexagonal-binning.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/articles/index.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/articles/maplibre-tiles.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/articles/mapping.html</loc></url>
@@ -15,6 +14,7 @@
 <url><loc>https://walker-data.com/freestiler/news/index.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/reference/freestile.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/reference/freestile_file.html</loc></url>
+<url><loc>https://walker-data.com/freestiler/reference/freestile_h3.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/reference/freestile_layer.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/reference/freestile_query.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/reference/freestiler-package.html</loc></url>
@@ -27,6 +27,7 @@
 <url><loc>https://walker-data.com/freestiler/reference/rust_pmtiles_metadata.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/reference/serve_tiles.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/reference/stop_server.html</loc></url>
+<url><loc>https://walker-data.com/freestiler/reference/view_h3_tiles.html</loc></url>
 <url><loc>https://walker-data.com/freestiler/reference/view_tiles.html</loc></url>
 </urlset>
 

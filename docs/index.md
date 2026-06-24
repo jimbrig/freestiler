@@ -174,6 +174,34 @@ freestile_file("census_blocks.parquet", "blocks.pmtiles")
 freestile_file("counties.gpkg", "counties.pmtiles", engine = "duckdb")
 ```
 
+## Dynamic hexagonal binning
+
+For dense point datasets,
+[`freestile_h3()`](https://walker-data.com/freestiler/reference/freestile_h3.md)
+aggregates points into H3 hexagons at zoom-appropriate resolutions: low
+zooms show coarse hexes summarizing whole regions, intermediate zooms
+show progressively finer hexes, and `base_zoom` and above reveal the
+underlying points. Aggregation rules are user-defined SQL (`COUNT(*)`,
+`SUM(pop)`, `AVG(value)`, …).
+
+``` r
+freestile_h3(
+  pts,
+  "wind.pmtiles",
+  agg = c(n = "COUNT(*)", total_mw = "SUM(capacity_mw)"),
+  min_zoom = 2, max_zoom = 12, base_zoom = 10
+)
+
+view_h3_tiles("wind.pmtiles", agg_column = "n")
+```
+
+Pass `fade = TRUE` to cross-fade between resolutions instead of swapping
+cleanly. Requires DuckDB and its [H3 community
+extension](https://duckdb.org/community_extensions/extensions/h3); see
+the [Hexagonal binning with
+H3](https://walker-data.com/freestiler/articles/h3-hexagonal-binning.html)
+article.
+
 ## Multi-layer tilesets
 
 ``` r
