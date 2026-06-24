@@ -14,7 +14,7 @@ freestile_query(
   output,
   db_path = NULL,
   layer_name = NULL,
-  tile_format = "mlt",
+  tile_format = "mvt",
   min_zoom = 0L,
   max_zoom = 14L,
   base_zoom = NULL,
@@ -36,6 +36,8 @@ freestile_query(
 
   Character. A SQL query that returns a geometry column. DuckDB spatial
   functions like `ST_Read()` and `read_parquet()` are available.
+  Multi-statement SQL is supported: setup statements (e.g., `LOAD h3;`)
+  are executed first, then the final SELECT is used for tiling.
 
 - output:
 
@@ -53,7 +55,7 @@ freestile_query(
 
 - tile_format:
 
-  Character. `"mlt"` (default) or `"mvt"`.
+  Character. `"mvt"` (default) or `"mlt"`.
 
 - min_zoom:
 

@@ -8,13 +8,13 @@
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-Create vector tile archives in PMTiles format from sf spatial data frames. Supports Mapbox Vector Tile (MVT) and MapLibre Tile (MLT) output formats. Uses a Rust backend via 'extendr' for fast, in-memory tiling with zero external system dependencies.
+Create vector tile archives in 'PMTiles' format from 'sf' spatial data frames. Supports 'Mapbox Vector Tile' ('MVT') and 'MapLibre Tile' ('MLT') output formats. Uses a 'Rust' backend via 'extendr' for fast, in-memory tiling with zero external system dependencies.
 }
 \seealso{
 Useful links:
 \itemize{
   \item \url{https://walker-data.com/freestiler/}
-  \item \url{https://github.com/walkerke/freestiler}
+  \item \url{https://github.com/walkerke/freestiler/}
   \item Report bugs at \url{https://github.com/walkerke/freestiler/issues}
 }
 

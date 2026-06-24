@@ -8,7 +8,7 @@ freestile(
   input,
   output,
   layer_name = NULL,
-  tile_format = "mlt",
+  tile_format = "mvt",
   min_zoom = 0L,
   max_zoom = 14L,
   base_zoom = NULL,
@@ -31,8 +31,8 @@ for multi-layer output.}
 \item{layer_name}{Character. Name for the tile layer. If NULL, derived from
 the output filename. Only used for single-layer input.}
 
-\item{tile_format}{Character. Tile encoding format: \code{"mlt"} (default) for
-MapLibre Tiles or \code{"mvt"} for Mapbox Vector Tiles.}
+\item{tile_format}{Character. Tile encoding format: \code{"mvt"} (default) for
+Mapbox Vector Tiles or \code{"mlt"} for MapLibre Tiles.}
 
 \item{min_zoom}{Integer. Minimum zoom level (default 0).}
 
@@ -81,6 +81,10 @@ Creates a PMTiles archive containing vector tiles from one or more sf data
 frames. Supports both Mapbox Vector Tile (MVT) and MapLibre Tile (MLT)
 formats, multi-layer output, feature dropping, point clustering, and feature
 coalescing.
+}
+\details{
+Input data in any coordinate reference system (CRS) is automatically
+reprojected to WGS84 (EPSG:4326) before tiling.
 }
 \examples{
 \dontrun{

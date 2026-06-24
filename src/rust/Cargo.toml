@@ -2,6 +2,7 @@
 name = "freestiler"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.77.2"
 
 [lib]
 crate-type = ["staticlib"]
@@ -22,7 +23,9 @@ freestiler-core = { path = "freestiler-core" }
 geo-types = "0.7"
 
 # Needed for PMTiles metadata reading
-pmtiles2 = "0.3"
+pmtiles2 = "=0.3.1"
+# Keep pmtiles2's proc-macro dependency chain on pre-Edition-2024 indexmap.
+indexmap = "=2.10.0"
 flate2 = "1"
 serde_json = "1"
 

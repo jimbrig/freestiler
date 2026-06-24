@@ -14,6 +14,15 @@ vendor_exists <- file.exists("src/rust/vendor.tar.xz")
 is_not_cran <- env_not_cran != ""
 is_debug <- env_debug != ""
 
+# r-universe builds set MY_UNIVERSE to the universe URL; treat as not-CRAN so
+# users of `install.packages("freestiler", repos = "https://*.r-universe.dev")`
+# get the full-feature build (DuckDB, GeoParquet opt-in) rather than the
+# stripped CRAN build.
+if (!is_not_cran && Sys.getenv("MY_UNIVERSE") != "") {
+  is_not_cran <- TRUE
+  message("Detected r-universe build (MY_UNIVERSE set) — enabling NOT_CRAN features.")
+}
+
 if (is_debug) {
   # if we have DEBUG then we set not cran to true
   # CRAN is always release build
@@ -76,6 +85,32 @@ cfg <- if (is_debug) "debug" else "release"
   ""
 )
 
+# Match Rust dependency C builds to R's macOS link target. Without this, build
+# scripts using the cc crate can inherit the SDK version and produce objects
+# newer than the deployment target used when R links the final shared library.
+.macos_deployment <- ""
+if (!is_windows && identical(Sys.info()[["sysname"]], "Darwin")) {
+  deployment_target <- Sys.getenv("MACOSX_DEPLOYMENT_TARGET")
+  if (!nzchar(deployment_target)) {
+    macos_version <- suppressWarnings(system2(
+      "sw_vers", "-productVersion",
+      stdout = TRUE, stderr = FALSE
+    ))
+    if (length(macos_version) > 0L &&
+        grepl("^[0-9]+(\\.[0-9]+)?", macos_version[1L])) {
+      macos_major <- sub("^([0-9]+).*", "\\1", macos_version[1L])
+      deployment_target <- paste0(macos_major, ".0")
+    }
+  }
+  if (nzchar(deployment_target)) {
+    message("Using MACOSX_DEPLOYMENT_TARGET=", deployment_target,
+            " for Rust build.")
+    .macos_deployment <- paste0(
+      "MACOSX_DEPLOYMENT_TARGET=", deployment_target, " "
+    )
+  }
+}
+
 # Cargo features
 # Keep advanced encodings opt-in for decoder compatibility.
 features <- character(0)
@@ -84,9 +119,12 @@ if (Sys.getenv("FREESTILER_FSST") != "") {
   message("Enabling FSST feature.")
 }
 
-# Additional optional features
+# Additional optional features. GeoParquet is default-on for non-CRAN
+# builds to match the Python wheels; opt out with FREESTILER_GEOPARQUET=false.
+# FastPFOR stays opt-in (advanced MLT encoding, niche use cases).
 if (is_not_cran) {
-  if (Sys.getenv("FREESTILER_GEOPARQUET") != "") {
+  geoparquet_env <- tolower(trimws(Sys.getenv("FREESTILER_GEOPARQUET", unset = "true")))
+  if (!geoparquet_env %in% c("0", "false", "no", "off")) {
     features <- c(features, "geoparquet")
     message("Enabling GeoParquet feature.")
   }
@@ -100,7 +138,7 @@ if (is_not_cran) {
 # currently target GNU toolchains, and bundled libduckdb-sys is not reliable
 # there yet. Set FREESTILER_DUCKDB=true to force-enable, or false/0/no/off to
 # disable explicitly.
-duckdb_default <- if (is_wasm) "false" else if (is_windows) "false" else "true"
+duckdb_default <- if (is_wasm) "false" else if (is_windows) "false" else if (!is_not_cran) "false" else "true"
 duckdb_env <- tolower(trimws(Sys.getenv("FREESTILER_DUCKDB", unset = duckdb_default)))
 duckdb_enabled <- !duckdb_env %in% c("0", "false", "no", "off")
 
@@ -148,6 +186,7 @@ new_txt <- gsub("@CRAN_FLAGS@", .cran_flags, mv_txt) |>
   gsub("@CLEAN_TARGET@", .clean_targets, x = _) |>
   gsub("@LIBDIR@", .libdir, x = _) |>
   gsub("@TARGET@", .target, x = _) |>
+  gsub("@MACOS_DEPLOYMENT@", .macos_deployment, x = _) |>
   gsub("@PANIC_EXPORTS@", .panic_exports, x = _) |>
   gsub("@FEATURES@", .features, x = _)
 

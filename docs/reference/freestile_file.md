@@ -1,13 +1,8 @@
 # Create vector tiles from a spatial file
 
 Reads a GeoParquet, GeoPackage, Shapefile, or other spatial file
-directly into the tiling engine. The GeoParquet engine requires
-compilation with `FREESTILER_GEOPARQUET=true`. The DuckDB engine uses
-the Rust DuckDB backend when included in the build (enabled by default
-for native builds), or falls back to the R `duckdb` package (which reads
-the file via DuckDB's `ST_Read()`, auto-detects the source CRS via
-`ST_Read_Meta()`, and reprojects to WGS84). Control backend selection
-with `options(freestiler.duckdb_backend = "auto"|"rust"|"r")`.
+directly into the tiling engine. Input data in any coordinate reference
+system is automatically reprojected to WGS84 (EPSG:4326) before tiling.
 
 ## Usage
 
@@ -16,7 +11,7 @@ freestile_file(
   input,
   output,
   layer_name = NULL,
-  tile_format = "mlt",
+  tile_format = "mvt",
   min_zoom = 0L,
   max_zoom = 14L,
   base_zoom = NULL,
@@ -48,7 +43,7 @@ freestile_file(
 
 - tile_format:
 
-  Character. `"mlt"` (default) or `"mvt"`.
+  Character. `"mvt"` (default) or `"mlt"`.
 
 - min_zoom:
 
@@ -101,6 +96,14 @@ freestile_file(
 ## Value
 
 The output file path (invisibly).
+
+## Details
+
+The GeoParquet engine requires compilation with
+`FREESTILER_GEOPARQUET=true`. The DuckDB engine uses the Rust DuckDB
+backend when included in the build (enabled by default for native
+builds), or falls back to the R `duckdb` package. Control backend
+selection with `options(freestiler.duckdb_backend = "auto"|"rust"|"r")`.
 
 ## Examples
 

@@ -1,6 +1,10 @@
 use prost::Message;
 use std::collections::HashMap;
 
+use crate::quantize::{
+    lat_to_tile_coord, lon_to_tile_coord, quantize_multipolygon, quantize_polygon_or_dot,
+    QuantPolygon,
+};
 use crate::tiler::{tile_bounds, Feature, Geometry, PropertyValue, TileCoord};
 
 /// MVT tile extent (coordinate space)
@@ -174,20 +178,6 @@ pub fn encode_tile(
     encode_tile_multilayer(coord, &[(layer_name, property_names, features)])
 }
 
-/// Convert a longitude to tile-local X coordinate (0..4096)
-fn lon_to_tile_coord(lon: f64, west: f64, east: f64) -> i32 {
-    ((lon - west) / (east - west) * EXTENT as f64).round() as i32
-}
-
-/// Convert a latitude to tile-local Y coordinate (0..4096, Y-down)
-fn lat_to_tile_coord(lat: f64, south: f64, north: f64) -> i32 {
-    // Interpolate in Mercator Y space (not linear latitude) for correct projection
-    let lat_merc = lat.to_radians().tan().asinh();
-    let south_merc = south.to_radians().tan().asinh();
-    let north_merc = north.to_radians().tan().asinh();
-    ((north_merc - lat_merc) / (north_merc - south_merc) * EXTENT as f64).round() as i32
-}
-
 /// Zigzag encode a signed integer
 fn zigzag(n: i32) -> u32 {
     ((n << 1) ^ (n >> 31)) as u32
@@ -240,16 +230,15 @@ fn encode_geometry(geom: &Geometry, west: f64, south: f64, east: f64, north: f64
             cmds
         }
         Geometry::Polygon(poly) => {
-            encode_polygon_cmds(poly, west, south, east, north, &mut 0, &mut 0)
+            let qp = quantize_polygon_or_dot(poly, west, south, east, north);
+            encode_quant_polygon_cmds(&qp, &mut 0, &mut 0)
         }
         Geometry::MultiPolygon(mp) => {
             let mut cmds = Vec::new();
             let mut cx = 0i32;
             let mut cy = 0i32;
-            for poly in &mp.0 {
-                cmds.extend(encode_polygon_cmds(
-                    poly, west, south, east, north, &mut cx, &mut cy,
-                ));
+            for qp in quantize_multipolygon(mp, west, south, east, north) {
+                cmds.extend(encode_quant_polygon_cmds(&qp, &mut cx, &mut cy));
             }
             cmds
         }
@@ -307,91 +296,38 @@ fn encode_linestring_cmds(
     cmds
 }
 
-fn encode_polygon_cmds(
-    poly: &geo_types::Polygon<f64>,
-    west: f64,
-    south: f64,
-    east: f64,
-    north: f64,
-    cx: &mut i32,
-    cy: &mut i32,
-) -> Vec<u32> {
-    let mut cmds = Vec::new();
-
-    // Encode exterior ring
-    let ext_cmds = encode_ring_cmds(poly.exterior(), west, south, east, north, cx, cy);
-    if ext_cmds.is_empty() {
-        return Vec::new();
+fn encode_quant_polygon_cmds(qp: &QuantPolygon, cx: &mut i32, cy: &mut i32) -> Vec<u32> {
+    let mut cmds = encode_quant_ring_cmds(&qp.exterior, cx, cy);
+    for interior in &qp.interiors {
+        cmds.extend(encode_quant_ring_cmds(interior, cx, cy));
     }
-    cmds.extend(ext_cmds);
-
-    // Encode interior rings (holes)
-    for interior in poly.interiors() {
-        let ring_cmds = encode_ring_cmds(interior, west, south, east, north, cx, cy);
-        if !ring_cmds.is_empty() {
-            cmds.extend(ring_cmds);
-        }
-    }
-
     cmds
 }
 
-fn encode_ring_cmds(
-    ring: &geo_types::LineString<f64>,
-    west: f64,
-    south: f64,
-    east: f64,
-    north: f64,
-    cx: &mut i32,
-    cy: &mut i32,
-) -> Vec<u32> {
-    // A ring should have at least 4 coords (3 unique + close) but the last == first
-    // We encode all but the last (ClosePath closes it)
-    let coords: Vec<_> = if ring.0.len() >= 2 && ring.0.first() == ring.0.last() {
-        ring.0[..ring.0.len() - 1].to_vec()
-    } else {
-        ring.0.clone()
-    };
-
+/// Encode an open ring of quantized tile coordinates. Rings from
+/// [`QuantPolygon`] are deduplicated, non-degenerate, and winding-normalized,
+/// so every vertex emits a command.
+fn encode_quant_ring_cmds(coords: &[(i32, i32)], cx: &mut i32, cy: &mut i32) -> Vec<u32> {
     if coords.len() < 3 {
         return Vec::new();
     }
 
-    let mut cmds = Vec::new();
+    let mut cmds = Vec::with_capacity(coords.len() * 2 + 3);
 
-    // MoveTo first point
-    let x = lon_to_tile_coord(coords[0].x, west, east);
-    let y = lat_to_tile_coord(coords[0].y, south, north);
+    let (x, y) = coords[0];
     cmds.push(command(CMD_MOVE_TO, 1));
     cmds.push(zigzag(x - *cx));
     cmds.push(zigzag(y - *cy));
     *cx = x;
     *cy = y;
 
-    // LineTo remaining points
-    let mut line_to_params: Vec<u32> = Vec::new();
-    let mut count = 0u32;
-    for coord in &coords[1..] {
-        let x = lon_to_tile_coord(coord.x, west, east);
-        let y = lat_to_tile_coord(coord.y, south, north);
-        let dx = x - *cx;
-        let dy = y - *cy;
-        if dx == 0 && dy == 0 {
-            continue;
-        }
-        line_to_params.push(zigzag(dx));
-        line_to_params.push(zigzag(dy));
+    cmds.push(command(CMD_LINE_TO, (coords.len() - 1) as u32));
+    for &(x, y) in &coords[1..] {
+        cmds.push(zigzag(x - *cx));
+        cmds.push(zigzag(y - *cy));
         *cx = x;
         *cy = y;
-        count += 1;
     }
-
-    if count < 2 {
-        return Vec::new();
-    }
-
-    cmds.push(command(CMD_LINE_TO, count));
-    cmds.extend(line_to_params);
     cmds.push(command(CMD_CLOSE_PATH, 1));
 
     cmds

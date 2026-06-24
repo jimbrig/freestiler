@@ -24,3 +24,6 @@
 ^mlt-spec\.md$
 ^README\.md$
 ^vignettes/_quarto\.yaml$
+^\.tmp-lib$
+^tools/build_cran\.R$
+^vignettes$

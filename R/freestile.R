@@ -44,13 +44,16 @@ freestile_layer <- function(input, min_zoom = NULL, max_zoom = NULL) {
 #' formats, multi-layer output, feature dropping, point clustering, and feature
 #' coalescing.
 #'
+#' Input data in any coordinate reference system (CRS) is automatically
+#' reprojected to WGS84 (EPSG:4326) before tiling.
+#'
 #' @param input An sf data frame, or a named list of sf/freestile_layer objects
 #'   for multi-layer output.
 #' @param output Character. Path for the output .pmtiles file.
 #' @param layer_name Character. Name for the tile layer. If NULL, derived from
 #'   the output filename. Only used for single-layer input.
-#' @param tile_format Character. Tile encoding format: `"mlt"` (default) for
-#'   MapLibre Tiles or `"mvt"` for Mapbox Vector Tiles.
+#' @param tile_format Character. Tile encoding format: `"mvt"` (default) for
+#'   Mapbox Vector Tiles or `"mlt"` for MapLibre Tiles.
 #' @param min_zoom Integer. Minimum zoom level (default 0).
 #' @param max_zoom Integer. Maximum zoom level (default 14).
 #' @param base_zoom Integer. Zoom level at and above which all features are
@@ -109,7 +112,7 @@ freestile <- function(
     input,
     output,
     layer_name = NULL,
-    tile_format = "mlt",
+    tile_format = "mvt",
     min_zoom = 0L,
     max_zoom = 14L,
     base_zoom = NULL,
@@ -122,7 +125,7 @@ freestile <- function(
     overwrite = TRUE,
     quiet = FALSE
 ) {
-  tile_format <- match.arg(tile_format, c("mlt", "mvt"))
+  tile_format <- match.arg(tile_format, c("mvt", "mlt"))
 
   output <- normalizePath(output, mustWork = FALSE)
 
@@ -341,19 +344,20 @@ freestile <- function(
 #' Create vector tiles from a spatial file
 #'
 #' Reads a GeoParquet, GeoPackage, Shapefile, or other spatial file directly
-#' into the tiling engine. The GeoParquet engine requires compilation with
-#' `FREESTILER_GEOPARQUET=true`. The DuckDB engine uses the Rust DuckDB backend
-#' when included in the build (enabled by default for native builds), or falls
-#' back to the R `duckdb` package (which reads the file via DuckDB's
-#' `ST_Read()`, auto-detects the source CRS via `ST_Read_Meta()`, and
-#' reprojects to WGS84). Control backend selection with
+#' into the tiling engine. Input data in any coordinate reference system is
+#' automatically reprojected to WGS84 (EPSG:4326) before tiling.
+#'
+#' The GeoParquet engine requires compilation with `FREESTILER_GEOPARQUET=true`.
+#' The DuckDB engine uses the Rust DuckDB backend when included in the build
+#' (enabled by default for native builds), or falls back to the R `duckdb`
+#' package. Control backend selection with
 #' `options(freestiler.duckdb_backend = "auto"|"rust"|"r")`.
 #'
 #' @param input Character. Path to the input spatial file.
 #' @param output Character. Path for the output .pmtiles file.
 #' @param layer_name Character. Name for the tile layer. If NULL, derived from
 #'   the output filename.
-#' @param tile_format Character. `"mlt"` (default) or `"mvt"`.
+#' @param tile_format Character. `"mvt"` (default) or `"mlt"`.
 #' @param min_zoom Integer. Minimum zoom level (default 0).
 #' @param max_zoom Integer. Maximum zoom level (default 14).
 #' @param base_zoom Integer. Zoom level at and above which all features are
@@ -383,7 +387,7 @@ freestile_file <- function(
     input,
     output,
     layer_name = NULL,
-    tile_format = "mlt",
+    tile_format = "mvt",
     min_zoom = 0L,
     max_zoom = 14L,
     base_zoom = NULL,
@@ -396,7 +400,7 @@ freestile_file <- function(
     quiet = FALSE,
     engine = "geoparquet"
 ) {
-  tile_format <- match.arg(tile_format, c("mlt", "mvt"))
+  tile_format <- match.arg(tile_format, c("mvt", "mlt"))
   engine <- match.arg(engine, c("geoparquet", "duckdb"))
 
   input <- normalizePath(input, mustWork = TRUE)
@@ -507,6 +511,22 @@ freestile_file <- function(
     quiet = quiet
   )
 
+  # If the Rust engine rejects the CRS, fall back to sf reprojection
+  if (startsWith(result, "Error:") && grepl("CRS|reproject", result, ignore.case = TRUE)) {
+    if (!quiet) message("Non-WGS84 CRS detected; reprojecting via sf...")
+    sf_data <- sf::st_read(input, quiet = TRUE)
+    return(freestile(
+      sf_data, output,
+      layer_name = layer_name, tile_format = tile_format,
+      min_zoom = min_zoom, max_zoom = max_zoom,
+      base_zoom = base_zoom, drop_rate = drop_rate,
+      cluster_distance = cluster_distance,
+      cluster_maxzoom = cluster_maxzoom,
+      coalesce = coalesce, simplification = simplification,
+      overwrite = FALSE, quiet = quiet
+    ))
+  }
+
   if (startsWith(result, "Error:")) {
     stop(result, call. = FALSE)
   }
@@ -538,6 +558,8 @@ freestile_file <- function(
 #'
 #' @param query Character. A SQL query that returns a geometry column. DuckDB
 #'   spatial functions like `ST_Read()` and `read_parquet()` are available.
+#'   Multi-statement SQL is supported: setup statements (e.g., `LOAD h3;`)
+#'   are executed first, then the final SELECT is used for tiling.
 #' @param output Character. Path for the output .pmtiles file.
 #' @param db_path Character. Path to a DuckDB database file, or NULL (default)
 #'   for an in-memory database.
@@ -546,7 +568,7 @@ freestile_file <- function(
 #'   `duckdb` fallback; ignored by the Rust DuckDB backend.
 #' @param layer_name Character. Name for the tile layer. If NULL, derived from
 #'   the output filename.
-#' @param tile_format Character. `"mlt"` (default) or `"mvt"`.
+#' @param tile_format Character. `"mvt"` (default) or `"mlt"`.
 #' @param min_zoom Integer. Minimum zoom level (default 0).
 #' @param max_zoom Integer. Maximum zoom level (default 14).
 #' @param base_zoom Integer. Zoom level at and above which all features are
@@ -594,7 +616,7 @@ freestile_query <- function(
     output,
     db_path = NULL,
     layer_name = NULL,
-    tile_format = "mlt",
+    tile_format = "mvt",
     min_zoom = 0L,
     max_zoom = 14L,
     base_zoom = NULL,
@@ -608,7 +630,7 @@ freestile_query <- function(
     source_crs = NULL,
     streaming = "auto"
 ) {
-  tile_format <- match.arg(tile_format, c("mlt", "mvt"))
+  tile_format <- match.arg(tile_format, c("mvt", "mlt"))
   streaming <- match.arg(streaming, c("auto", "always", "never"))
 
   output <- normalizePath(output, mustWork = FALSE)
@@ -778,6 +800,17 @@ freestile_query <- function(
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   DBI::dbExecute(con, "INSTALL spatial; LOAD spatial;")
+
+  # Split multi-statement SQL: run setup, keep final SELECT
+  stmts <- strsplit(sql, ";")[[1L]]
+  stmts <- trimws(stmts)
+  stmts <- stmts[nzchar(stmts)]
+  if (length(stmts) > 1L) {
+    for (s in stmts[-length(stmts)]) {
+      DBI::dbExecute(con, s)
+    }
+    sql <- stmts[length(stmts)]
+  }
 
   if (is.null(source_crs) || !nzchar(source_crs)) {
     stop(

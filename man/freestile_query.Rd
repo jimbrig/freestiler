@@ -9,7 +9,7 @@ freestile_query(
   output,
   db_path = NULL,
   layer_name = NULL,
-  tile_format = "mlt",
+  tile_format = "mvt",
   min_zoom = 0L,
   max_zoom = 14L,
   base_zoom = NULL,
@@ -26,7 +26,9 @@ freestile_query(
 }
 \arguments{
 \item{query}{Character. A SQL query that returns a geometry column. DuckDB
-spatial functions like \code{ST_Read()} and \code{read_parquet()} are available.}
+spatial functions like \code{ST_Read()} and \code{read_parquet()} are available.
+Multi-statement SQL is supported: setup statements (e.g., \verb{LOAD h3;})
+are executed first, then the final SELECT is used for tiling.}
 
 \item{output}{Character. Path for the output .pmtiles file.}
 
@@ -36,7 +38,7 @@ for an in-memory database.}
 \item{layer_name}{Character. Name for the tile layer. If NULL, derived from
 the output filename.}
 
-\item{tile_format}{Character. \code{"mlt"} (default) or \code{"mvt"}.}
+\item{tile_format}{Character. \code{"mvt"} (default) or \code{"mlt"}.}
 
 \item{min_zoom}{Integer. Minimum zoom level (default 0).}
 

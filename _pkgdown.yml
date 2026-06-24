@@ -27,6 +27,8 @@ navbar:
         href: articles/getting-started.html
       - text: Mapping with mapgl
         href: articles/mapping.html
+      - text: Hexagonal binning with H3
+        href: articles/h3-hexagonal-binning.html
       - text: "---"
       - text: MapLibre Tiles (MLT)
         href: articles/maplibre-tiles.html
@@ -41,6 +43,7 @@ reference:
   - freestile_file
   - freestile_query
   - freestile_layer
+  - freestile_h3
 
 - title: Viewing Tiles
   desc: Serve and view PMTiles locally
@@ -48,6 +51,7 @@ reference:
   - serve_tiles
   - stop_server
   - view_tiles
+  - view_h3_tiles
 
 - title: internal
   contents:
@@ -63,6 +67,11 @@ articles:
   navbar: ~
   contents:
   - mapping
+
+- title: Dynamic Binning
+  navbar: ~
+  contents:
+  - h3-hexagonal-binning
 
 - title: Technical Details
   navbar: ~

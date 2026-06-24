@@ -10,7 +10,13 @@
 
 ### R
 
-Install from [r-universe](https://walkerke.r-universe.dev):
+freestiler is available on CRAN: 
+
+```r
+install.packages("freestiler")
+```
+
+For the full feature set powered by Rust DuckDB (MacOS and Linux only), install from [r-universe](https://walkerke.r-universe.dev):
 
 ```r
 install.packages(
@@ -167,6 +173,23 @@ For GeoParquet, the direct file path is powered by the optional Rust
 `FREESTILER_GEOPARQUET=true`, `freestile_file()` can read WKB-based GeoParquet
 directly without materializing the data in the R session first.
 
+## Dynamic hexagonal binning
+
+For dense point datasets, `freestile_h3()` aggregates points into H3 hexagons at zoom-appropriate resolutions: low zooms show coarse hexes summarizing whole regions, intermediate zooms show progressively finer hexes, and `base_zoom` and above reveal the underlying points. Aggregation rules are user-defined SQL (`COUNT(*)`, `SUM(pop)`, `AVG(value)`, ...).
+
+```r
+freestile_h3(
+  pts,
+  "wind.pmtiles",
+  agg = c(n = "COUNT(*)", total_mw = "SUM(capacity_mw)"),
+  min_zoom = 2, max_zoom = 12, base_zoom = 10
+)
+
+view_h3_tiles("wind.pmtiles", agg_column = "n")
+```
+
+Pass `fade = TRUE` to cross-fade between resolutions instead of swapping cleanly. Requires DuckDB and its [H3 community extension](https://duckdb.org/community_extensions/extensions/h3); see the [Hexagonal binning with H3](https://walker-data.com/freestiler/articles/h3-hexagonal-binning.html) article.
+
 ## Multi-layer tilesets
 
 ```r
@@ -183,7 +206,7 @@ freestile(
 
 ## Tile formats
 
-freestiler defaults to [MapLibre Tiles (MLT)](https://github.com/maplibre/maplibre-tile-spec), a columnar encoding that produces smaller files for polygon and line data. Use `tile_format = "mvt"` when you need the widest viewer compatibility.
+freestiler defaults to [Mapbox Vector Tiles (MVT)](https://github.com/mapbox/vector-tile-spec), the widely-supported protobuf format that works with both MapLibre GL JS and Mapbox GL JS. The experimental [MapLibre Tiles (MLT)](https://github.com/maplibre/maplibre-tile-spec) format is also available via `tile_format = "mlt"` and can produce smaller files for polygon and line data.
 
 ## Learn more
 

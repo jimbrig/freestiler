@@ -1,6 +1,10 @@
 use integer_encoding::VarInt;
 use std::collections::HashMap;
 
+use crate::quantize::{
+    lat_to_tile_coord, lon_to_tile_coord, quantize_multipolygon, quantize_polygon_or_dot,
+    QuantPolygon,
+};
 use crate::tiler::{tile_bounds, Feature, Geometry, PropertyValue, TileCoord};
 
 /// MLT tile extent
@@ -683,65 +687,38 @@ fn collect_geometry_data(
             }
         }
         Geometry::Polygon(poly) => {
-            let ring_count = 1 + poly.interiors().len();
-            num_parts.push(ring_count as u32);
-            // Exterior ring
-            let ext = poly.exterior();
-            let ext_coords: Vec<_> = if ext.0.len() >= 2 && ext.0.first() == ext.0.last() {
-                ext.0[..ext.0.len() - 1].to_vec()
-            } else {
-                ext.0.clone()
-            };
-            num_rings.push(ext_coords.len() as u32);
-            for c in &ext_coords {
-                vertices_x.push(lon_to_tile_coord(c.x, west, east));
-                vertices_y.push(lat_to_tile_coord(c.y, south, north));
-            }
-            // Interior rings
-            for interior in poly.interiors() {
-                let int_coords: Vec<_> =
-                    if interior.0.len() >= 2 && interior.0.first() == interior.0.last() {
-                        interior.0[..interior.0.len() - 1].to_vec()
-                    } else {
-                        interior.0.clone()
-                    };
-                num_rings.push(int_coords.len() as u32);
-                for c in &int_coords {
-                    vertices_x.push(lon_to_tile_coord(c.x, west, east));
-                    vertices_y.push(lat_to_tile_coord(c.y, south, north));
-                }
-            }
+            let qp = quantize_polygon_or_dot(poly, west, south, east, north);
+            push_quant_polygon(&qp, num_parts, num_rings, vertices_x, vertices_y);
         }
         Geometry::MultiPolygon(mp) => {
-            num_geometries.push(mp.0.len() as u32);
-            for poly in &mp.0 {
-                let ring_count = 1 + poly.interiors().len();
-                num_parts.push(ring_count as u32);
-                let ext = poly.exterior();
-                let ext_coords: Vec<_> = if ext.0.len() >= 2 && ext.0.first() == ext.0.last() {
-                    ext.0[..ext.0.len() - 1].to_vec()
-                } else {
-                    ext.0.clone()
-                };
-                num_rings.push(ext_coords.len() as u32);
-                for c in &ext_coords {
-                    vertices_x.push(lon_to_tile_coord(c.x, west, east));
-                    vertices_y.push(lat_to_tile_coord(c.y, south, north));
-                }
-                for interior in poly.interiors() {
-                    let int_coords: Vec<_> =
-                        if interior.0.len() >= 2 && interior.0.first() == interior.0.last() {
-                            interior.0[..interior.0.len() - 1].to_vec()
-                        } else {
-                            interior.0.clone()
-                        };
-                    num_rings.push(int_coords.len() as u32);
-                    for c in &int_coords {
-                        vertices_x.push(lon_to_tile_coord(c.x, west, east));
-                        vertices_y.push(lat_to_tile_coord(c.y, south, north));
-                    }
-                }
+            let parts = quantize_multipolygon(mp, west, south, east, north);
+            num_geometries.push(parts.len() as u32);
+            for qp in &parts {
+                push_quant_polygon(qp, num_parts, num_rings, vertices_x, vertices_y);
             }
+        }
+    }
+}
+
+/// Push a quantized polygon's rings into the MLT geometry streams.
+fn push_quant_polygon(
+    qp: &QuantPolygon,
+    num_parts: &mut Vec<u32>,
+    num_rings: &mut Vec<u32>,
+    vertices_x: &mut Vec<i32>,
+    vertices_y: &mut Vec<i32>,
+) {
+    num_parts.push((1 + qp.interiors.len()) as u32);
+    num_rings.push(qp.exterior.len() as u32);
+    for &(x, y) in &qp.exterior {
+        vertices_x.push(x);
+        vertices_y.push(y);
+    }
+    for ring in &qp.interiors {
+        num_rings.push(ring.len() as u32);
+        for &(x, y) in ring {
+            vertices_x.push(x);
+            vertices_y.push(y);
         }
     }
 }
@@ -1319,18 +1296,6 @@ fn try_fsst_dictionary(dict_entries: &[&str]) -> Option<FsstEncoded> {
 }
 
 // --- Helper functions ---
-
-fn lon_to_tile_coord(lon: f64, west: f64, east: f64) -> i32 {
-    ((lon - west) / (east - west) * EXTENT as f64).round() as i32
-}
-
-fn lat_to_tile_coord(lat: f64, south: f64, north: f64) -> i32 {
-    // Interpolate in Mercator Y space (not linear latitude) for correct projection
-    let lat_merc = lat.to_radians().tan().asinh();
-    let south_merc = south.to_radians().tan().asinh();
-    let north_merc = north.to_radians().tan().asinh();
-    ((north_merc - lat_merc) / (north_merc - south_merc) * EXTENT as f64).round() as i32
-}
 
 fn delta_encode_i32(values: &[i32]) -> Vec<i32> {
     let mut result = Vec::with_capacity(values.len());
