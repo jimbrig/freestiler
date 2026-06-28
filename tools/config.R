@@ -115,6 +115,7 @@ if (!is_windows && identical(Sys.info()[["sysname"]], "Darwin")) {
 }
 
 # Cargo features
+# This fork always enables Rust DuckDB + GeoParquet for native builds.
 # Keep advanced encodings opt-in for decoder compatibility.
 features <- character(0)
 if (Sys.getenv("FREESTILER_FSST") != "") {
@@ -122,36 +123,16 @@ if (Sys.getenv("FREESTILER_FSST") != "") {
   message("Enabling FSST feature.")
 }
 
-# Additional optional features. GeoParquet is default-on for non-CRAN
-# builds to match the Python wheels; opt out with FREESTILER_GEOPARQUET=false.
-# FastPFOR stays opt-in (advanced MLT encoding, niche use cases).
-if (is_not_cran) {
-  geoparquet_env <- tolower(trimws(Sys.getenv("FREESTILER_GEOPARQUET", unset = "true")))
-  if (!geoparquet_env %in% c("0", "false", "no", "off")) {
-    features <- c(features, "geoparquet")
-    message("Enabling GeoParquet feature.")
-  }
-  if (Sys.getenv("FREESTILER_FASTPFOR") != "") {
-    features <- c(features, "fastpfor")
-    message("Enabling FastPFOR feature.")
-  }
+# Always-on native feature set for this fork.
+if (!is_wasm) {
+  features <- c(features, "geoparquet", "duckdb")
+  message("Enabling GeoParquet + DuckDB features.")
 }
 
-# DuckDB is enabled by default for native non-Windows builds. Windows R builds
-# currently target GNU toolchains, and bundled libduckdb-sys is not reliable
-# there yet. Set FREESTILER_DUCKDB=true to force-enable, or false/0/no/off to
-# disable explicitly.
-duckdb_default <- if (is_wasm) "false" else if (is_windows) "false" else if (!is_not_cran) "false" else "true"
-duckdb_env <- tolower(trimws(Sys.getenv("FREESTILER_DUCKDB", unset = duckdb_default)))
-duckdb_enabled <- !duckdb_env %in% c("0", "false", "no", "off")
-
-if (!is_wasm && duckdb_enabled) {
-  features <- c(features, "duckdb")
-  message("Enabling DuckDB feature.")
-} else if (is_windows) {
-  message("DuckDB feature disabled on Windows by default.")
-} else if (!is_wasm) {
-  message("DuckDB feature disabled.")
+# FastPFOR stays opt-in (advanced MLT encoding, niche use cases).
+if (Sys.getenv("FREESTILER_FASTPFOR") != "") {
+  features <- c(features, "fastpfor")
+  message("Enabling FastPFOR feature.")
 }
 .features <- if (length(features) > 0) {
   paste0("--features ", paste(features, collapse = ","))

@@ -1,8 +1,6 @@
-# Helper to check if geoparquet feature is compiled
+# helper to check if geoparquet feature is compiled
 .has_geoparquet <- function() {
-  result <- rust_freestile_file("", "", "", "mvt", 0L, 6L, -1L, TRUE,
-    -1.0, -1.0, -1L, FALSE, TRUE)
-  !startsWith(result, "Error: GeoParquet support not compiled")
+  freestiler:::.has_rust_geoparquet()
 }
 
 # Write an sf object as GeoParquet using arrow (geometry as WKB binary column)

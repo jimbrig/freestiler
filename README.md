@@ -2,9 +2,20 @@
 
 <!-- badges: start -->
 [![R Package](https://github.com/jimbrig/freestiler/actions/workflows/r-package.yml/badge.svg)](https://github.com/jimbrig/freestiler/actions/workflows/r-package.yml)
+[![R-universe version](https://jimbrig.r-universe.dev/freestiler/badges/version)](https://jimbrig.r-universe.dev/freestiler)
+[![pages-build-deployment](https://github.com/jimbrig/freestiler/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/jimbrig/freestiler/actions/workflows/pages/pages-build-deployment)
 <!-- badges: end -->
 
-**freestiler** creates [PMTiles](https://github.com/protomaps/PMTiles) vector tilesets from R and Python. Give it an sf object, a file on disk, or a DuckDB SQL query, and it writes a single `.pmtiles` file you can serve from anywhere. The tiling engine is written in Rust and runs in-process, so there's nothing else to install.
+**freestiler** creates [PMTiles](https://github.com/protomaps/PMTiles) vector tilesets from R. Give it an sf object, a file on disk, or a DuckDB SQL query, and it writes a single `.pmtiles` file you can serve from anywhere. The tiling engine is written in Rust and runs in-process, so there's nothing else to install.
+
+## About this fork
+
+This is an R-only fork of [walkerke/freestiler](https://github.com/walkerke/freestiler). It tracks upstream's R package and API, with one deliberate difference: native builds **always statically compile both Rust backends into the package**:
+
+- **Rust DuckDB** (`duckdb-rs`, bundled) — powers `freestile_query()` and the `engine = "duckdb"` file reader, enabling out-of-R-memory, file-to-file and SQL-to-tiles workflows.
+- **GeoParquet** (native Rust reader) — powers direct `.parquet` tiling via `freestile_file()`.
+
+Upstream ships these off by default on Windows; here they are always on, including on Windows (built with the Rtools45 GNU/UCRT toolchain). Because DuckDB is statically linked, the result is a single self-contained DLL with **no external runtime dependencies** — once installed, `library(freestiler)` gives you the full feature set with no PATH or runtime setup. Python packaging is intentionally not part of this fork.
 
 ## Installation
 
@@ -16,7 +27,7 @@ freestiler is available on CRAN:
 install.packages("freestiler")
 ```
 
-For the full feature set powered by Rust DuckDB (MacOS and Linux only), install from [r-universe](https://walkerke.r-universe.dev):
+For the upstream package, install from [r-universe](https://walkerke.r-universe.dev):
 
 ```r
 install.packages(
@@ -25,39 +36,46 @@ install.packages(
 )
 ```
 
-Or install from GitHub:
+Install this fork from GitHub with standard R tooling:
 
 ```r
 # install.packages("pak")
 pak::pak("jimbrig/freestiler")
 ```
 
-Source builds support optional Rust features via environment variables. For
-example, this enables the direct GeoParquet reader:
+This fork is configured to always compile native builds with Rust GeoParquet
+and Rust DuckDB enabled.
+
+#### Windows feature-enabled source build (this fork)
+
+This fork includes a repeatable local build flow for Windows that enables both
+Rust feature paths (`geoparquet` and `duckdb`) into a project-local library:
 
 ```r
-Sys.setenv(
-  NOT_CRAN = "true",
-  FREESTILER_GEOPARQUET = "true"
-)
-
-pak::pak("jimbrig/freestiler")
+source("build.R")
 ```
 
-When the `geoparquet` feature is enabled, the Rust reader supports both Snappy-
-and Zstd-compressed GeoParquet files. On Windows, the Rust DuckDB backend
-remains disabled by default, so `freestile_query()` still falls back to the R
-`duckdb` package unless you maintain a separate custom build.
+After building:
 
-### Python
+```r
+.libPaths(c("build/library", .libPaths()))
+library(freestiler)
+freestiler:::.has_rust_duckdb()
+freestiler:::.has_rust_geoparquet()
+```
+
+To install into your normal library (so plain `library(freestiler)` works
+everywhere, no `lib.loc` needed):
+
+```r
+source("install.R")
+```
+
+You can also run the feature smoke checks used by CI:
 
 ```bash
-pip install freestiler
+Rscript tools/feature-smoke.R --lib build/library --require-rust-duckdb --require-geoparquet
 ```
-
-Published PyPI wheels currently target Python 3.9 through 3.14.
-
-See the [Python Setup](https://walker-data.com/freestiler/articles/python.html) article for more details.
 
 ## Quick start
 
@@ -168,10 +186,10 @@ freestile_file("census_blocks.parquet", "blocks.pmtiles")
 freestile_file("counties.gpkg", "counties.pmtiles", engine = "duckdb")
 ```
 
-For GeoParquet, the direct file path is powered by the optional Rust
-`geoparquet` feature. If you install from source with
-`FREESTILER_GEOPARQUET=true`, `freestile_file()` can read WKB-based GeoParquet
-directly without materializing the data in the R session first.
+For GeoParquet, the direct file path is powered by the Rust `geoparquet`
+backend, which this fork always compiles in. `freestile_file()` reads
+WKB-based GeoParquet directly without materializing the data in the R session
+first.
 
 ## Dynamic hexagonal binning
 
@@ -213,4 +231,3 @@ freestiler defaults to [Mapbox Vector Tiles (MVT)](https://github.com/mapbox/vec
 - [Getting Started](https://walker-data.com/freestiler/articles/getting-started.html) - full tutorial
 - [Mapping with mapgl](https://walker-data.com/freestiler/articles/mapping.html) - viewing and styling tiles with mapgl
 - [MapLibre Tiles (MLT)](https://walker-data.com/freestiler/articles/maplibre-tiles.html) - MLT vs MVT and when to use each
-- [Python Setup](https://walker-data.com/freestiler/articles/python.html) - Python installation and usage

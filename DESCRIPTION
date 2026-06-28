@@ -1,6 +1,6 @@
 Package: freestiler
 Title: Create Vector Tiles from Spatial Data
-Version: 0.2.0
+Version: 0.3.0
 Date: 2026-06-24
 Authors@R: c(
     person("Kyle", "Walker", , "kyle@walker-data.com", role = c("aut", "rev")),
@@ -14,7 +14,8 @@ Description: A forked, windows-specific build of the original freestiler
     a 'Rust' backend via 'extendr' for fast, in-memory tiling with zero
     external system dependencies.
 License: MIT + file LICENSE
-URL: https://walker-data.com/freestiler/, https://github.com/walkerke/freestiler/, https://github.com/jimbrig/freestiler
+URL: https://github.com/jimbrig/freestiler,
+    http://docs.jimbrig.com/freestiler/
 BugReports: https://github.com/jimbrig/freestiler/issues
 Depends:
     R (>= 4.2)

@@ -28,6 +28,7 @@
 ^tools/build_cran\.R$
 ^vignettes$
 ^build\.R$
+^install\.R$
 ^\.positai$
 ^\.cursor$
 ^\.repomixignore$
@@ -35,3 +36,8 @@
 ^repomix-output\.txt$
 ^build$
 ^build_install\.log$
+^dev$
+^\.cursorignore$
+^AGENTS\.md$
+^[.]?air[.]toml$
+^\.vscode$

@@ -745,6 +745,17 @@ freestile_query <- function(
   val
 }
 
+#' Check if Rust GeoParquet feature is compiled (cached per session)
+#' @noRd
+.has_rust_geoparquet <- function() {
+  if (!is.null(.pkg_cache$rust_geoparquet)) return(.pkg_cache$rust_geoparquet)
+  result <- rust_freestile_file("", "", "", "mvt", 0L, 6L, -1L, TRUE,
+    -1.0, -1.0, -1L, FALSE, TRUE)
+  val <- !startsWith(result, "Error: GeoParquet support not compiled")
+  .pkg_cache$rust_geoparquet <- val
+  val
+}
+
 #' Check if R duckdb package is available
 #' @noRd
 .has_r_duckdb <- function() {

@@ -44,3 +44,4 @@ build_install.log
 repomix.config.json
 repomix-output.txt
 tests/testthat/data/*.fgb
+docs

@@ -1,8 +1,6 @@
 # Helper to check if Rust duckdb feature is compiled
 .has_rust_duckdb_test <- function() {
-  result <- rust_freestile_duckdb_query("", "", "", "", "mvt", 0L, 6L, -1L,
-    TRUE, -1.0, -1.0, -1L, FALSE, TRUE, "never")
-  !startsWith(result, "Error: DuckDB support not compiled")
+  freestiler:::.has_rust_duckdb()
 }
 
 # Helper to check if R duckdb package is available

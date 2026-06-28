@@ -1,24 +1,27 @@
-url: https://walker-data.com/freestiler/
+url: http://docs.jimbrig.com/freestiler/
 template:
   bootstrap: 5
   bslib:
-    bg: "#f9f7f3"
-    fg: "#2b4a2b"
-    primary: "#355e3b"
-    secondary: "#6b8e6b"
-    link-color: "#2e8cb8"
-    code-color: "#355e3b"
-
+    bg: '#f9f7f3'
+    fg: '#2b4a2b'
+    primary: '#355e3b'
+    secondary: '#6b8e6b'
+    link-color: '#2e8cb8'
+    code-color: '#355e3b'
 home:
   title: freestiler
   description: Rust-powered vector tile engine for R and Python
-
 navbar:
-  bg: "#2b4a2b"
+  bg: '#2b4a2b'
   type: dark
   structure:
-    left:  [intro, reference, articles]
-    right: [search, github]
+    left:
+    - intro
+    - reference
+    - articles
+    right:
+    - search
+    - github
   components:
     articles:
       text: Articles
@@ -29,12 +32,11 @@ navbar:
         href: articles/mapping.html
       - text: Hexagonal binning with H3
         href: articles/h3-hexagonal-binning.html
-      - text: "---"
+      - text: '---'
       - text: MapLibre Tiles (MLT)
         href: articles/maplibre-tiles.html
       - text: Python Setup
         href: articles/python.html
-
 reference:
 - title: Tile Generation
   desc: Create PMTiles archives from spatial data
@@ -44,7 +46,6 @@ reference:
   - freestile_query
   - freestile_layer
   - freestile_h3
-
 - title: Viewing Tiles
   desc: Serve and view PMTiles locally
   contents:
@@ -52,33 +53,22 @@ reference:
   - stop_server
   - view_tiles
   - view_h3_tiles
-
 - title: internal
-  contents:
-  - starts_with("rust_")
-
+  contents: starts_with("rust_")
 articles:
 - title: Getting Started
   navbar: ~
-  contents:
-  - getting-started
-
+  contents: getting-started
 - title: Mapping
   navbar: ~
-  contents:
-  - mapping
-
+  contents: mapping
 - title: Dynamic Binning
   navbar: ~
-  contents:
-  - h3-hexagonal-binning
-
+  contents: h3-hexagonal-binning
 - title: Technical Details
   navbar: ~
-  contents:
-  - maplibre-tiles
-
+  contents: maplibre-tiles
 - title: Python Setup
   navbar: ~
-  contents:
-  - python
+  contents: python
+

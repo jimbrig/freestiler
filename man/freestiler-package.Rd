@@ -8,19 +8,29 @@
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-Create vector tile archives in 'PMTiles' format from 'sf' spatial data frames. Supports 'Mapbox Vector Tile' ('MVT') and 'MapLibre Tile' ('MLT') output formats. Uses a 'Rust' backend via 'extendr' for fast, in-memory tiling with zero external system dependencies.
+A forked, windows-specific build of the original freestiler package which provides features to create vector tile archives in 'PMTiles' format from 'sf' spatial data frames. Supports 'Mapbox Vector Tile' ('MVT') and 'MapLibre Tile' ('MLT') output formats. Uses a 'Rust' backend via 'extendr' for fast, in-memory tiling with zero external system dependencies.
 }
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://walker-data.com/freestiler/}
-  \item \url{https://github.com/walkerke/freestiler/}
-  \item Report bugs at \url{https://github.com/walkerke/freestiler/issues}
+  \item \url{https://github.com/jimbrig/freestiler}
+  \item \url{http://docs.jimbrig.com/freestiler/}
+  \item Report bugs at \url{https://github.com/jimbrig/freestiler/issues}
 }
 
 }
 \author{
-\strong{Maintainer}: Kyle Walker \email{kyle@walker-data.com}
+\strong{Maintainer}: 
+
+Authors:
+\itemize{
+  \item Kyle Walker \email{kyle@walker-data.com} [reviewer]
+}
+
+Other contributors:
+\itemize{
+  \item Jimmy Briggs \email{jimmy.briggs@noclocks.dev} (\href{https://orcid.org/0000-0002-7489-8787}{ORCID}) [contributor]
+}
 
 }
 \keyword{internal}
