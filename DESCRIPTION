@@ -4,7 +4,7 @@ Version: 0.3.0
 Date: 2026-06-24
 Authors@R: c(
     person("Kyle", "Walker", , "kyle@walker-data.com", role = c("aut", "rev")),
-    person("Jimmy", "Briggs", , "jimmy.briggs@noclocks.dev", role = "ctb",
+    person("Jimmy", "Briggs", , "jimmy.briggs@noclocks.dev", role = c("ctb", "cre"),
            comment = c(ORCID = "0000-0002-7489-8787"))
   )
 Description: A forked, windows-specific build of the original freestiler
