@@ -19,63 +19,52 @@ Upstream ships these off by default on Windows; here they are always on, includi
 
 ## Installation
 
-### R
-
-freestiler is available on CRAN: 
-
-```r
-install.packages("freestiler")
-```
-
-For the upstream package, install from [r-universe](https://walkerke.r-universe.dev):
-
-```r
-install.packages(
-  "freestiler",
-  repos = c("https://walkerke.r-universe.dev", "https://cloud.r-project.org")
-)
-```
-
-Install this fork from GitHub with standard R tooling:
+This fork is Windows-focused and always compiles the Rust GeoParquet and DuckDB
+backends in. Install it from GitHub with [pak](https://pak.r-lib.org):
 
 ```r
 # install.packages("pak")
 pak::pak("jimbrig/freestiler")
 ```
 
-This fork is configured to always compile native builds with Rust GeoParquet
-and Rust DuckDB enabled.
-
-#### Windows feature-enabled source build (this fork)
-
-This fork includes a repeatable local build flow for Windows that enables both
-Rust feature paths (`geoparquet` and `duckdb`) into a project-local library:
+From a local clone of this repo:
 
 ```r
-source("build.R")
+pak::local_install()
 ```
 
-After building:
+Once an r-universe binary has built, you can install it without a Rust
+toolchain:
 
 ```r
-.libPaths(c("build/library", .libPaths()))
+install.packages(
+  "freestiler",
+  repos = c("https://jimbrig.r-universe.dev", "https://cloud.r-project.org")
+)
+```
+
+> The upstream package (Rust DuckDB off by default on Windows) is on
+> [CRAN](https://cran.r-project.org/package=freestiler) and
+> [walkerke.r-universe.dev](https://walkerke.r-universe.dev).
+
+### Verifying the Rust backends
+
+```r
 library(freestiler)
 freestiler:::.has_rust_duckdb()
 freestiler:::.has_rust_geoparquet()
 ```
 
-To install into your normal library (so plain `library(freestiler)` works
-everywhere, no `lib.loc` needed):
+### Building from source (maintainers)
 
-```r
-source("install.R")
-```
+`install.R` and `build.R` are convenience scripts for source builds. They locate
+Rtools via `pkgbuild`, isolate the build from any personal `~/.R/Makevars`, and
+verify both Rust backends are compiled in:
 
-You can also run the feature smoke checks used by CI:
+- `source("install.R")` — install into your normal library
+- `source("build.R")` — install into an isolated `build/library/` for testing
 
-```bash
-Rscript tools/feature-smoke.R --lib build/library --require-rust-duckdb --require-geoparquet
-```
+`tools/feature-smoke.R` runs the same feature checks used in CI.
 
 ## Quick start
 

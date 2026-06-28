@@ -1,4 +1,3 @@
-
 usethis::use_github_links(overwrite = TRUE)
 usethis::use_air()
 
@@ -15,7 +14,7 @@ desc::desc_add_author(
   given = "Jimmy",
   family = "Briggs",
   email = "jimmy.briggs@noclocks.dev",
-  role = c("ctb"),
+  role = c("ctb", "cre"),
   orcid = "0000-0002-7489-8787"
 )
 
