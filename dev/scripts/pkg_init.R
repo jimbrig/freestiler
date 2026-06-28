@@ -19,6 +19,13 @@ desc::desc_add_author(
   orcid = "0000-0002-7489-8787"
 )
 
+desc::desc_change_maintainer(
+  given = "Jimmy",
+  family = "Briggs",
+  email = "jimmy.briggs@noclocks.dev",
+  orcid = "0000-0002-7489-8787"
+)
+
 desc::desc_set(
   "Title" = "Create Vector Tiles from Spatial Data",
   "Description" = "A forked, windows-specific build of the original freestiler package which provides features to create vector
