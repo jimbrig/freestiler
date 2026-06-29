@@ -1,0 +1,13 @@
+pandoc: 3.8.3
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  getting-started: getting-started.html
+  h3-hexagonal-binning: h3-hexagonal-binning.html
+  maplibre-tiles: maplibre-tiles.html
+  mapping: mapping.html
+  python: python.html
+last_built: 2026-06-29T00:15Z
+urls:
+  reference: http://docs.jimbrig.com/freestiler/reference
+  article: http://docs.jimbrig.com/freestiler/articles

@@ -1,0 +1,153 @@
+# Create vector tiles from a DuckDB SQL query
+
+Executes a SQL query via DuckDB's spatial extension and pipes the
+results into the tiling engine. Uses the Rust DuckDB backend when
+included in the build (enabled by default for native builds), or falls
+back to the R `duckdb` package. Control backend selection with
+`options(freestiler.duckdb_backend = "auto"|"rust"|"r")`.
+
+## Usage
+
+``` r
+freestile_query(
+  query,
+  output,
+  db_path = NULL,
+  layer_name = NULL,
+  tile_format = "mvt",
+  min_zoom = 0L,
+  max_zoom = 14L,
+  base_zoom = NULL,
+  drop_rate = NULL,
+  cluster_distance = NULL,
+  cluster_maxzoom = NULL,
+  coalesce = FALSE,
+  simplification = TRUE,
+  overwrite = TRUE,
+  quiet = FALSE,
+  source_crs = NULL,
+  streaming = "auto"
+)
+```
+
+## Arguments
+
+- query:
+
+  Character. A SQL query that returns a geometry column. DuckDB spatial
+  functions like `ST_Read()` and `read_parquet()` are available.
+  Multi-statement SQL is supported: setup statements (e.g., `LOAD h3;`)
+  are executed first, then the final SELECT is used for tiling.
+
+- output:
+
+  Character. Path for the output .pmtiles file.
+
+- db_path:
+
+  Character. Path to a DuckDB database file, or NULL (default) for an
+  in-memory database.
+
+- layer_name:
+
+  Character. Name for the tile layer. If NULL, derived from the output
+  filename.
+
+- tile_format:
+
+  Character. `"mvt"` (default) or `"mlt"`.
+
+- min_zoom:
+
+  Integer. Minimum zoom level (default 0).
+
+- max_zoom:
+
+  Integer. Maximum zoom level (default 14).
+
+- base_zoom:
+
+  Integer. Zoom level at and above which all features are present. NULL
+  (default) uses max_zoom.
+
+- drop_rate:
+
+  Numeric. Exponential drop rate. NULL (default) disables.
+
+- cluster_distance:
+
+  Numeric. Pixel distance for clustering. NULL disables.
+
+- cluster_maxzoom:
+
+  Integer. Max zoom for clustering. Default max_zoom - 1.
+
+- coalesce:
+
+  Logical. Whether to merge features with identical attributes (default
+  FALSE).
+
+- simplification:
+
+  Logical. Whether to snap geometries to the tile pixel grid (default
+  TRUE).
+
+- overwrite:
+
+  Logical. Whether to overwrite existing output (default TRUE).
+
+- quiet:
+
+  Logical. Whether to suppress progress (default FALSE).
+
+- source_crs:
+
+  Character or NULL. CRS of the geometry returned by `query`, for
+  example `"EPSG:4326"` or `"EPSG:4267"`. Used only by the R `duckdb`
+  fallback; ignored by the Rust DuckDB backend.
+
+- streaming:
+
+  Character. DuckDB query execution mode: `"auto"` (default) enables the
+  streaming point pipeline for large queries, `"always"` forces it, and
+  `"never"` uses the existing in-memory path.
+
+## Value
+
+The output file path (invisibly).
+
+## Details
+
+When using the R fallback, `source_crs` must be supplied explicitly so
+the query result can be interpreted or reprojected correctly. Pass
+`"EPSG:4326"` if the SQL already returns WGS84 geometry, or the source
+CRS string (for example `"EPSG:4267"`) to have DuckDB reproject to WGS84
+before tiling. For file-based input where the CRS is embedded in the
+file, use
+[`freestile_file()`](http://docs.jimbrig.com/freestiler/reference/freestile_file.md)
+with `engine = "duckdb"` instead, which auto-detects the source CRS.
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+# Query a GeoParquet file
+freestile_query(
+  "SELECT * FROM read_parquet('data.parquet') WHERE pop > 50000",
+  "output.pmtiles"
+)
+
+# Query a Shapefile
+freestile_query(
+  "SELECT * FROM ST_Read('counties.shp')",
+  "counties.pmtiles"
+)
+
+# Query with an existing DuckDB database
+freestile_query(
+  "SELECT * FROM my_table WHERE region = 'West'",
+  "west.pmtiles",
+  db_path = "my_database.duckdb"
+)
+} # }
+```

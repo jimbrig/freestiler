@@ -1,0 +1,76 @@
+# MapLibre Tiles (MLT)
+
+freestiler supports the [MapLibre Tiles
+(MLT)](https://github.com/maplibre/maplibre-tile-spec) format, a
+columnar binary tile encoding announced in January 2026 by the MapLibre
+organization. While the default format is MVT for broad compatibility,
+MLT can produce smaller files for polygon and line data. This article
+explains what MLT is, how it compares to MVT, and when you might want to
+use one vs the other.
+
+### Vector tiles in brief
+
+Vector tiles divide geographic data into a grid of square tiles at
+multiple zoom levels. Unlike raster tiles (pre-rendered images), vector
+tiles store the actual geometry and attribute data, so the client can
+style, interact with, and dynamically render the data. The standard
+container for vector tilesets is
+[PMTiles](https://github.com/protomaps/PMTiles) - a single-file archive
+you can serve from any static file host.
+
+### MVT: the standard
+
+[Mapbox Vector Tiles (MVT)](https://github.com/mapbox/vector-tile-spec)
+has been the dominant vector tile encoding since Mapbox introduced it in
+2014. It uses Protocol Buffers to serialize geometry and attributes, and
+it’s supported by every major mapping library: MapLibre GL, Mapbox GL,
+Leaflet, deck.gl, and more. When you need maximum compatibility, MVT is
+the safe choice.
+
+### MLT: what’s different
+
+Where MVT stores data row-by-row (one feature at a time), MLT organizes
+data column-by-column - all x-coordinates together, all y-coordinates
+together, all values of a given attribute together. This columnar layout
+opens up compression techniques that aren’t available in MVT’s
+row-oriented format: delta encoding for coordinates, run-length encoding
+for repeated values, and dictionary encoding for string columns with low
+cardinality.
+
+The practical result is smaller tiles, especially for polygon-heavy
+datasets:
+
+| Dataset                 | MVT    | MLT    | Savings |
+|-------------------------|--------|--------|---------|
+| NC counties (z0-14)     | 78 KB  | 65 KB  | 17%     |
+| US block groups (z4-12) | 310 MB | 259 MB | 16%     |
+| Education dots (z0-12)  | 238 MB | 237 MB | ~0%     |
+
+Point-only datasets see minimal savings because coordinate data
+dominates and compresses similarly in both formats.
+
+### Which format should I use?
+
+Use **MLT** when you’re working in R with
+[mapgl](https://walker-data.com/mapgl/) or viewing in a browser with
+MapLibre GL JS 5.21+, and you want smaller file sizes for polygon and
+line data.
+
+Use **MVT** (the default) for the widest viewer compatibility - it works
+with MapLibre GL JS, Mapbox GL JS (which now supports PMTiles natively
+as of v3.21), deck.gl, and more. You can switch formats with a single
+argument:
+
+``` r
+
+freestile(nc, "nc_mlt.pmtiles", layer_name = "counties", tile_format = "mlt")
+```
+
+### Ecosystem status
+
+MLT was announced in January 2026, and library support is growing:
+
+- **Encoding**: freestiler (Rust, R + Python), mlt-core reference
+  encoder (Java/C++)
+- **Decoding**: MapLibre GL JS (experimental, v5.21+), mlt-core decoder
+- **Viewing**: MapLibre GL JS, mapgl in R
