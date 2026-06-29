@@ -10,6 +10,7 @@ on:
       - "man/**"
       - "src/**"
       - "tools/**"
+      - "tests/**"
       - "configure"
       - "configure.win"
       - "cleanup"
@@ -26,6 +27,7 @@ on:
       - "man/**"
       - "src/**"
       - "tools/**"
+      - "tests/**"
       - "configure"
       - "configure.win"
       - "cleanup"
@@ -35,12 +37,12 @@ permissions:
   contents: read
 
 env:
-  NOT_CRAN: true
+  NOT_CRAN: "true"
 
 jobs:
-  build-source:
-    name: Build Source Tarball
-    runs-on: ubuntu-latest
+  check:
+    name: R-CMD-check (Windows)
+    runs-on: windows-2022
 
     steps:
       - uses: actions/checkout@v4
@@ -50,37 +52,18 @@ jobs:
           use-public-rspm: true
 
       - uses: dtolnay/rust-toolchain@stable
-
-      - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::pkgbuild
-          needs: check
+          targets: x86_64-pc-windows-gnu
 
-      - name: Build source package
-        shell: bash
-        run: |
-          mkdir -p dist
-          R CMD build .
-          mv freestiler_*.tar.gz dist/
-
-      - uses: actions/upload-artifact@v4
+      - name: Cache cargo + Rust target
+        uses: actions/cache@v4
         with:
-          name: r-source-package
-          path: dist/*.tar.gz
-
-  check-linux:
-    name: R CMD Check (Linux)
-    runs-on: ubuntu-latest
-    needs: build-source
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: r-lib/actions/setup-r@v2
-        with:
-          use-public-rspm: true
-
-      - uses: dtolnay/rust-toolchain@stable
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
@@ -93,89 +76,21 @@ jobs:
           rm -f src/rust/vendor.tar.xz
           rm -rf src/vendor src/.cargo
 
-      - name: Check package
-        shell: bash
-        run: |
-          R CMD check --as-cran .
-
-  feature-smoke-linux:
-    name: Feature Smoke (Linux)
-    runs-on: ubuntu-latest
-    needs: build-source
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: r-lib/actions/setup-r@v2
-        with:
-          use-public-rspm: true
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::pkgbuild
-          needs: check
-
-      - name: Use online Cargo resolution in CI
-        shell: bash
-        run: |
-          rm -f src/rust/vendor.tar.xz
-          rm -rf src/vendor src/.cargo
-
-      - name: Install package for smoke checks
-        shell: bash
-        run: |
-          mkdir -p .ci-lib
-          R CMD INSTALL --library=.ci-lib --no-multiarch .
-
-      - name: Run feature smoke checks
-        shell: bash
-        run: |
-          Rscript tools/feature-smoke.R --lib .ci-lib --require-rust-duckdb --require-geoparquet
-
-  feature-smoke-windows:
-    name: Feature Smoke (Windows custom build)
-    runs-on: windows-2022
-    needs: build-source
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: r-lib/actions/setup-r@v2
-        with:
-          use-public-rspm: true
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-gnu
-
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::testthat
-          needs: check
-
-      - name: Build feature-enabled Windows library
-        shell: bash
+      - uses: r-lib/actions/check-r-package@v2
         env:
-          FREESTILER_LIB: build/library
-        run: |
-          Rscript build.R
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: gcc.exe
+        with:
+          args: 'c("--no-manual", "--no-multiarch")'
+          error-on: '"error"'
+          upload-snapshots: true
 
-      - name: Run feature smoke checks
-        shell: bash
-        run: |
-          Rscript tools/feature-smoke.R --lib build/library --require-rust-duckdb --require-geoparquet
-
-      - name: Run feature-focused test files against custom build
-        shell: bash
-        run: |
-          Rscript -e ".libPaths(c('build/library', .libPaths())); testthat::test_file('tests/testthat/test-file-input.R'); testthat::test_file('tests/testthat/test-query.R')"
-
-  build-windows-package:
-    name: Build Package (Windows)
+  binary:
+    name: Windows binary
+    # Skip on PRs (the check job already compiles); build/publish on main and tags.
+    if: github.event_name != 'pull_request'
     runs-on: windows-2022
-    needs: build-source
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -188,6 +103,16 @@ jobs:
         with:
           targets: x86_64-pc-windows-gnu
 
+      - name: Cache cargo + Rust target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::pkgbuild
@@ -199,7 +124,7 @@ jobs:
           rm -f src/rust/vendor.tar.xz
           rm -rf src/vendor src/.cargo
 
-      - name: Build binary package (Windows)
+      - name: Build + install Windows binary
         shell: bash
         env:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: gcc.exe
@@ -208,74 +133,19 @@ jobs:
           R CMD INSTALL --build .
           mv *.zip binary/
 
+      - name: Verify both Rust backends are compiled in
+        shell: bash
+        run: |
+          Rscript tools/feature-smoke.R --require-rust-duckdb --require-geoparquet
+
       - uses: actions/upload-artifact@v4
         with:
           name: r-binary-windows
           path: binary/*.zip
 
-  build-binaries:
-    name: Build Binary (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    needs: build-source
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            artifact_name: r-binary-macos
-            package_glob: "*.tgz"
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: r-lib/actions/setup-r@v2
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: r-lib/actions/setup-r-dependencies@v2
+      - name: Publish release asset
+        if: startsWith(github.ref, 'refs/tags/r-v')
+        uses: softprops/action-gh-release@v2
         with:
-          extra-packages: any::pkgbuild
-          needs: check
-
-      - name: Use online Cargo resolution in CI
-        shell: bash
-        run: |
-          rm -f src/rust/vendor.tar.xz
-          rm -rf src/vendor src/.cargo
-
-      - name: Build binary package (macOS)
-        shell: bash
-        run: |
-          mkdir -p binary
-          R CMD INSTALL --build .
-          mv *.tgz binary/
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: binary/${{ matrix.package_glob }}
-
-  release-assets:
-    name: Publish Release Assets
-    if: startsWith(github.ref, 'refs/tags/r-v')
-    needs:
-      - build-source
-      - check-linux
-      - feature-smoke-linux
-      - feature-smoke-windows
-      - build-windows-package
-      - build-binaries
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-          merge-multiple: true
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: release-assets/*
+          files: binary/*.zip
           generate_release_notes: true
