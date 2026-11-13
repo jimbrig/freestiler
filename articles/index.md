@@ -14,12 +14,10 @@
 
 - [Dynamic hexagonal binning with
   H3](http://docs.jimbrig.com/freestiler/articles/h3-hexagonal-binning.md):
+- [Point
+  clustering](http://docs.jimbrig.com/freestiler/articles/point-clustering.md):
 
 ### Technical Details
 
 - [MapLibre Tiles
   (MLT)](http://docs.jimbrig.com/freestiler/articles/maplibre-tiles.md):
-
-### Python Setup
-
-- [Python Setup](http://docs.jimbrig.com/freestiler/articles/python.md):

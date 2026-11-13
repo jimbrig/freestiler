@@ -29,3 +29,13 @@ Other contributors:
 
 - Jimmy Briggs <jimmy.briggs@noclocks.dev>
   ([ORCID](https://orcid.org/0000-0002-7489-8787)) \[contributor\]
+
+Authors:
+
+- Kyle Walker <kyle@walker-data.com>
+
+Other contributors:
+
+- Mapbox (Supercluster code (ISC)) \[copyright holder\]
+
+- Vladimir Agafonkin (KDBush code (ISC)) \[copyright holder\]

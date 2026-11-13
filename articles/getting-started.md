@@ -16,13 +16,25 @@ a next-generation columnar format. See the [MapLibre
 Tiles](http://docs.jimbrig.com/freestiler/articles/maplibre-tiles.md)
 article for more on the differences.
 
-Input data in any coordinate reference system is automatically
-reprojected to WGS84 (EPSG:4326) before tiling, so you don’t need to
-worry about CRS transformations.
+sf inputs and CRS-tagged DuckDB geometry are reprojected to WGS84
+(EPSG:4326) before tiling. When a query creates geometry from
+coordinates, use longitude and latitude in that order. Categorical file
+clustering requires a GeoParquet file already in WGS84.
 
 ### Installation
 
-Install from [r-universe](https://walkerke.r-universe.dev):
+Install from CRAN for tiling sf objects, including ordinary point
+clustering and H3 binning:
+
+``` r
+
+install.packages("freestiler")
+```
+
+For native GeoParquet input, categorical file clustering, or streaming
+point queries, install from
+[R-Universe](https://walkerke.r-universe.dev). Restart R before
+replacing an existing installation:
 
 ``` r
 
@@ -32,34 +44,20 @@ install.packages(
 )
 ```
 
-The r-universe build includes the Rust DuckDB backend on macOS and
-Linux, which powers the streaming point pipeline in
-[`freestile_query()`](http://docs.jimbrig.com/freestiler/reference/freestile_query.md).
-You can also install from GitHub with `pak::pak("jimbrig/freestiler")`
-or `devtools::install_github("jimbrig/freestiler")`.
-
-If you need the direct Rust GeoParquet reader in an R source build,
-enable it before installation:
+This fork always compiles Rust DuckDB and GeoParquet into native builds
+(including Windows). Install from GitHub with
+`pak::pak("jimbrig/freestiler")`, or from
+[jimbrig.r-universe.dev](https://jimbrig.r-universe.dev) once a binary
+is published. Upstream CRAN / walkerke.r-universe builds may still omit
+those backends on Windows — see the fork README.
 
 ``` r
 
-Sys.setenv(
-  NOT_CRAN = "true",
-  FREESTILER_GEOPARQUET = "true"
-)
-
 pak::pak("jimbrig/freestiler")
+
+# maintainer source install (always-on backends):
+# just install
 ```
-
-With the `geoparquet` feature enabled, the Rust reader supports both
-Snappy- and Zstd-compressed GeoParquet files. On Windows, the Rust
-DuckDB backend is still disabled by default, so
-[`freestile_query()`](http://docs.jimbrig.com/freestiler/reference/freestile_query.md)
-falls back to the R `duckdb` package unless you maintain a custom build
-with DuckDB enabled.
-
-For Python, see the [Python
-Setup](http://docs.jimbrig.com/freestiler/articles/python.md) article.
 
 ### Your first tileset
 
@@ -206,6 +204,13 @@ freestile_query(
 )
 ```
 
+CRS-tagged query results are automatically reprojected by the native
+DuckDB reader. With the R fallback, always pass `source_crs`, for
+example `"EPSG:4326"` when the query already returns WGS84. Native
+GeoParquet and DuckDB readers, along with the R DuckDB fallback, write
+dates as `YYYY-MM-DD` text and timestamps with a `T` separator. Zoned
+timestamps use UTC with a `Z` suffix. Missing values remain missing.
+
 For very large point datasets, set `streaming = "always"` to use the
 streaming pipeline, which avoids loading the full query result into
 memory:
@@ -234,6 +239,31 @@ into a 2.3 GB PMTiles archive in about 12 minutes.
 ![](images/paste-1.png)
 
 ![](images/paste-2.png)
+
+### Planning a large job
+
+Streaming currently supports POINT queries without clustering. Line and
+polygon inputs still need memory for the decoded geometries, even though
+encoded tiles are written to a temporary file as they are produced.
+Categorical clustering keeps its global point index in memory, and H3
+binning keeps the output hexagons in memory.
+
+Leave space for both temporary files and the final PMTiles archive.
+Streaming also writes point partitions and may spill DuckDB work to
+disk, so temporary storage can be substantially larger than the finished
+map. Select only the attributes you need in the query.
+
+For streaming jobs, these environment variables can help:
+
+| Variable | Purpose |
+|----|----|
+| `FREESTILER_TEMP_DIR` | Put temporary partitions and DuckDB spill files on a disk with enough space. |
+| `FREESTILER_DUCKDB_MEMORY` | Set DuckDB’s memory limit, such as `4GB`. This is not a limit on the whole process. |
+| `FREESTILER_STREAM_WORKERS` | Number of partitions tiled at once; defaults to 1. More workers need more memory. |
+
+The output file is replaced only after a successful build. If a dense
+tile exceeds a memory budget, try `drop_rate` or a higher `min_zoom`
+before increasing the budget.
 
 ### Multi-layer tilesets
 
@@ -267,6 +297,16 @@ freestile(pts, "nc_clustered.pmtiles",
   cluster_maxzoom = 8
 )
 ```
+
+In the development version,
+[`freestile()`](http://docs.jimbrig.com/freestiler/reference/freestile.md)
+also accepts `category` and `category_values` directly for a POINT sf
+object, with no GeoParquet or DuckDB requirement. See [Point
+clustering](http://docs.jimbrig.com/freestiler/articles/point-clustering.md)
+for a complete example that reads power plants into sf (or a
+GeoDataFrame in Python), builds one archive, and displays donut clusters
+with mapgl. Released 0.3.0 supports categorical clustering through
+[`freestile_file()`](http://docs.jimbrig.com/freestiler/reference/freestile_file.md).
 
 ### Feature coalescing
 

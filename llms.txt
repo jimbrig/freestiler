@@ -28,8 +28,23 @@ Because DuckDB is statically linked, the result is a single
 self-contained DLL with **no external runtime dependencies** — once
 installed,
 [`library(freestiler)`](https://github.com/jimbrig/freestiler) gives you
-the full feature set with no PATH or runtime setup. Python packaging is
-intentionally not part of this fork.
+the full feature set with no PATH or runtime setup. This fork does
+**not** ship or maintain the Python package — use
+[walkerke/freestiler](https://github.com/walkerke/freestiler) for that.
+
+## New in 0.3.0
+
+Build clusters with category counts, create hexagon-only maps with
+category shares, and stream large point datasets from DuckDB. This
+release also reduces memory use when writing tiles and fixes date, CRS,
+and line-encoding issues. See the
+[changelog](https://walker-data.com/freestiler/news/index.html) for
+details.
+
+Explore the [2020 Census race and ethnicity
+map](https://walker-data.com/maps/census-2020/race.html) and [age
+map](https://walker-data.com/maps/census-2020/age.html) to see dots,
+categorical hexagons, and donut clusters together.
 
 ## Installation
 
@@ -48,6 +63,7 @@ From a local clone of this repo:
 ``` r
 
 pak::local_install()
+# or: just install
 ```
 
 Once an r-universe binary has built, you can install it without a Rust
@@ -76,15 +92,19 @@ freestiler:::.has_rust_geoparquet()
 
 ### Building from source (maintainers)
 
-`install.R` and `build.R` are convenience scripts for source builds.
-They locate Rtools via `pkgbuild`, isolate the build from any personal
-`~/.R/Makevars`, and verify both Rust backends are compiled in:
+Use [`just`](https://github.com/casey/just) from the repo root (wrappers
+around `tools/install.R` and `tools/build.R`). The scripts locate Rtools
+via `pkgbuild`, isolate the build from any personal `~/.R/Makevars`, and
+verify both Rust backends are compiled in:
 
-- `source("install.R")` — install into your normal library
-- `source("build.R")` — install into an isolated `build/library/` for
-  testing
+``` bash
+just install   # user library
+just build     # isolated build/library/
+just smoke     # CI-style Rust feature checks
+just test
+```
 
-`tools/feature-smoke.R` runs the same feature checks used in CI.
+Equiv without just: `Rscript tools/install.R`, `Rscript tools/build.R`.
 
 ## Quick start
 
@@ -257,6 +277,34 @@ the [Hexagonal binning with
 H3](https://walker-data.com/freestiler/articles/h3-hexagonal-binning.html)
 article.
 
+For hexagons at every zoom, set `include_points = FALSE` and leave
+`base_zoom` unset. Add `category` and `category_values` to retain
+category counts, the most common category, its share, and ties.
+
+## Categorical point clusters
+
+With R development version 0.3.0.9000 or later from R-Universe, pass a
+POINT sf object directly to
+[`freestile()`](http://docs.jimbrig.com/freestiler/reference/freestile.md)
+to count categories within each cluster:
+
+``` r
+
+freestile(
+  places, "place_clusters.pmtiles",
+  layer_name = "places", min_zoom = 0, max_zoom = 14,
+  cluster_distance = 60, cluster_maxzoom = 10,
+  category = "kind", category_values = c("park", "museum", "library")
+)
+```
+
+The same archive contains individual points above `cluster_maxzoom`.
+Python accepts a GeoDataFrame in the same way. This path works without
+native GeoParquet or DuckDB, including in the CRAN build; it is not in
+the released 0.3.0 packages yet. See [Point
+clustering](https://walker-data.com/freestiler/articles/point-clustering.html)
+for a complete power-plant example in R and Python.
+
 ## Multi-layer tilesets
 
 ``` r
@@ -290,6 +338,12 @@ polygon and line data.
 - [Mapping with
   mapgl](https://walker-data.com/freestiler/articles/mapping.html) -
   viewing and styling tiles with mapgl
+- [Point
+  clustering](https://walker-data.com/freestiler/articles/point-clustering.html) -
+  clusters with category counts
+- [Hexagonal binning with
+  H3](https://walker-data.com/freestiler/articles/h3-hexagonal-binning.html) -
+  counts, summaries, and categorical hexagons
 - [MapLibre Tiles
   (MLT)](https://walker-data.com/freestiler/articles/maplibre-tiles.html) -
   MLT vs MVT and when to use each
@@ -340,12 +394,10 @@ Serve and view PMTiles locally
 
 - [Dynamic hexagonal binning with
   H3](http://docs.jimbrig.com/freestiler/articles/h3-hexagonal-binning.md):
+- [Point
+  clustering](http://docs.jimbrig.com/freestiler/articles/point-clustering.md):
 
 ### Technical Details
 
 - [MapLibre Tiles
   (MLT)](http://docs.jimbrig.com/freestiler/articles/maplibre-tiles.md):
-
-### Python Setup
-
-- [Python Setup](http://docs.jimbrig.com/freestiler/articles/python.md):
