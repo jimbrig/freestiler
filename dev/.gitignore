@@ -1,0 +1,10 @@
+# keep planning docs; ignore heavy / ephemeral local trees
+references/
+sandbox/
+extdata/
+examples/
+check/
+*.pmtiles
+*.parquet
+*.fgb
+*.gpkg

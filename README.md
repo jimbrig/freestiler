@@ -15,7 +15,7 @@ This is an R-only fork of [walkerke/freestiler](https://github.com/walkerke/free
 - **Rust DuckDB** (`duckdb-rs`, bundled) — powers `freestile_query()` and the `engine = "duckdb"` file reader, enabling out-of-R-memory, file-to-file and SQL-to-tiles workflows.
 - **GeoParquet** (native Rust reader) — powers direct `.parquet` tiling via `freestile_file()`.
 
-Upstream ships these off by default on Windows; here they are always on, including on Windows (built with the Rtools45 GNU/UCRT toolchain). Because DuckDB is statically linked, the result is a single self-contained DLL with **no external runtime dependencies** — once installed, `library(freestiler)` gives you the full feature set with no PATH or runtime setup. Python packaging is intentionally not part of this fork.
+Upstream ships these off by default on Windows; here they are always on, including on Windows (built with the Rtools45 GNU/UCRT toolchain). Because DuckDB is statically linked, the result is a single self-contained DLL with **no external runtime dependencies** — once installed, `library(freestiler)` gives you the full feature set with no PATH or runtime setup. This fork does **not** ship or maintain the Python package — use [walkerke/freestiler](https://github.com/walkerke/freestiler) for that.
 
 ## Installation
 
@@ -57,14 +57,19 @@ freestiler:::.has_rust_geoparquet()
 
 ### Building from source (maintainers)
 
-`install.R` and `build.R` are convenience scripts for source builds. They locate
-Rtools via `pkgbuild`, isolate the build from any personal `~/.R/Makevars`, and
-verify both Rust backends are compiled in:
+Use [`just`](https://github.com/casey/just) from the repo root (wrappers around
+`tools/install.R` and `tools/build.R`). The scripts locate Rtools via
+`pkgbuild`, isolate the build from any personal `~/.R/Makevars`, and verify
+both Rust backends are compiled in:
 
-- `source("install.R")` — install into your normal library
-- `source("build.R")` — install into an isolated `build/library/` for testing
+```bash
+just install   # user library
+just build     # isolated build/library/
+just smoke     # CI-style Rust feature checks
+just test
+```
 
-`tools/feature-smoke.R` runs the same feature checks used in CI.
+Equiv without just: `Rscript tools/install.R`, `Rscript tools/build.R`.
 
 ## Quick start
 
