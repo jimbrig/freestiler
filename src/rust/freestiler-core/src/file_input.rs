@@ -91,10 +91,22 @@ fn wkb_to_geometry(wkb_bytes: &[u8]) -> Option<Geometry> {
         geo_types::Geometry::MultiPoint(mp) => Some(Geometry::MultiPoint(mp)),
         geo_types::Geometry::LineString(ls) => Some(Geometry::LineString(ls)),
         geo_types::Geometry::MultiLineString(mls) => Some(Geometry::MultiLineString(mls)),
-        geo_types::Geometry::Polygon(p) => Some(Geometry::Polygon(p)),
-        geo_types::Geometry::MultiPolygon(mp) => Some(Geometry::MultiPolygon(mp)),
+        geo_types::Geometry::Polygon(p) => Some(Geometry::Polygon(shrink_polygon(p))),
+        geo_types::Geometry::MultiPolygon(mp) => Some(Geometry::MultiPolygon(
+            geo_types::MultiPolygon(mp.0.into_iter().map(shrink_polygon).collect()),
+        )),
         _ => None,
     }
+}
+
+/// geozero's WKB reader leaves an empty-but-allocated interior-ring Vec on
+/// every single-ring polygon; at millions of features those dangling
+/// allocations add up, so release them here.
+#[cfg(any(feature = "geoparquet", feature = "duckdb"))]
+fn shrink_polygon(poly: geo_types::Polygon<f64>) -> geo_types::Polygon<f64> {
+    let (exterior, mut interiors) = poly.into_inner();
+    interiors.shrink_to_fit();
+    geo_types::Polygon::new(exterior, interiors)
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +121,81 @@ mod geoparquet_impl {
     use arrow_schema::DataType;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
     use std::fs::File;
+
+    /// Replayable GeoParquet POINT source. Physical file/row-group/row order
+    /// defines Supercluster seed order; no parallel scan reorders records.
+    pub struct ParquetPointSource {
+        path: String,
+        geometry: String,
+        rows: usize,
+        names: Vec<String>,
+        types: Vec<String>,
+        size: u64,
+        modified: std::time::SystemTime,
+        provenance: serde_json::Value,
+    }
+    impl ParquetPointSource {
+        pub fn open(path: &str) -> Result<Self, String> {
+            let file=File::open(path).map_err(|e|e.to_string())?;
+            let stat=file.metadata().map_err(|e|e.to_string())?;
+            let builder=ParquetRecordBatchReaderBuilder::try_new(file).map_err(|e|e.to_string())?;
+            let geometry=find_geometry_column(builder.metadata()).unwrap_or_else(||"geometry".into());
+            check_crs_is_wgs84(builder.metadata(),&geometry)?;
+            builder.schema().index_of(&geometry).map_err(|_|format!("Geometry column '{geometry}' not found"))?;
+            let rows=usize::try_from(builder.metadata().file_metadata().num_rows()).map_err(|_|"Invalid Parquet row count")?;
+            if rows>=1usize<<31 {return Err("Clustering currently supports fewer than 2^31 rows".into());}
+            let fields:Vec<_>=builder.schema().fields().iter().filter(|f|f.name()!=&geometry).collect();
+            for field in &fields {
+                if !matches!(field.data_type(),DataType::Boolean|DataType::Int8|DataType::Int16|DataType::Int32|DataType::Int64|DataType::UInt8|DataType::UInt16|DataType::UInt32|DataType::UInt64|DataType::Float32|DataType::Float64|DataType::Utf8|DataType::LargeUtf8|DataType::Date32|DataType::Date64|DataType::Timestamp(_,_)|DataType::Time32(_)|DataType::Time64(_)) {
+                    return Err(format!("Unsupported clustering property type for '{}': {:?}; cast it to a supported scalar type",field.name(),field.data_type()));
+                }
+            }
+            let names=fields.iter().map(|f|f.name().clone()).collect();
+            let types=fields.iter().map(|f|arrow_type_to_string(f.data_type())).collect();
+            let provenance=builder.metadata().file_metadata().key_value_metadata().and_then(|kv|kv.iter().find(|e|e.key=="freestiler_input"))
+                .and_then(|e|e.value.as_deref()).map(serde_json::from_str).transpose().map_err(|e|format!("Invalid source provenance: {e}"))?
+                .unwrap_or_else(||serde_json::json!({"ordering":"physical Parquet row-group and row order"}));
+            Ok(Self {path:path.into(),geometry,rows,names,types,size:stat.len(),modified:stat.modified().map_err(|e|e.to_string())?,provenance})
+        }
+    }
+    impl crate::cluster_output::PointSource for ParquetPointSource {
+        fn len(&self)->usize {self.rows}
+        fn property_names(&self)->&[String] {&self.names}
+        fn property_types(&self)->&[String] {&self.types}
+        fn provenance(&self)->serde_json::Value {self.provenance.clone()}
+        fn check_unchanged(&self)->Result<(),String> {
+            let m=std::fs::metadata(&self.path).map_err(|e|e.to_string())?;
+            if m.len()!=self.size || m.modified().map_err(|e|e.to_string())?!=self.modified {return Err("Ordered Parquet source changed during clustering".into());}
+            Ok(())
+        }
+        fn scan(&self,visit:&mut dyn FnMut(Feature)->Result<(),String>)->Result<(),String> {
+            self.check_unchanged()?;
+            let builder=ParquetRecordBatchReaderBuilder::try_new(File::open(&self.path).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+            let schema=builder.schema().clone();
+            let geom=schema.index_of(&self.geometry).map_err(|e|e.to_string())?;
+            let props:Vec<_>=(0..schema.fields().len()).filter(|&i|i!=geom).collect();
+            let reader=builder.with_batch_size(65_536).build().map_err(|e|e.to_string())?;
+            let mut ordinal=0u64;
+            for batch in reader {
+                let batch=batch.map_err(|e|e.to_string())?;
+                for row in 0..batch.num_rows() {
+                    let geometry=extract_wkb_geometry(batch.column(geom).as_ref(),row).ok_or_else(||format!("Null/invalid geometry at ordered row {ordinal}"))?;
+                    if !matches!(geometry,Geometry::Point(_)) {return Err("Clustering requires POINT geometries only (MultiPoint is not supported)".into());}
+                    let properties=props.iter().map(|&i| {
+                        let col=batch.column(i).as_ref();
+                        if !col.is_null(row) && matches!(col.data_type(),DataType::UInt64) && col.as_primitive::<arrow_array::types::UInt64Type>().value(row)>i64::MAX as u64 {
+                            return Err(format!("Unsigned property '{}' exceeds signed integer transport range",schema.field(i).name()));
+                        }
+                        extract_property_value(col,row)
+                    }).collect::<Result<_,String>>()?;
+                    visit(Feature {id:Some(ordinal),geometry,properties})?;
+                    ordinal+=1;
+                }
+            }
+            if ordinal!=self.rows as u64 {return Err("Ordered Parquet row count changed".into());}
+            self.check_unchanged()
+        }
+    }
 
     pub fn parquet_to_layers(
         path: &str,
@@ -126,11 +213,16 @@ mod geoparquet_impl {
 
         check_crs_is_wgs84(builder.metadata(), &geom_col_name)?;
 
+        let num_rows = builder.metadata().file_metadata().num_rows().max(0) as usize;
+
         let reader = builder
             .build()
             .map_err(|e| format!("Cannot build reader: {}", e))?;
 
         let mut features: Vec<Feature> = Vec::new();
+        features
+            .try_reserve_exact(num_rows)
+            .map_err(|e| format!("Cannot allocate memory for {} features: {}", num_rows, e))?;
         let mut prop_names: Vec<String> = Vec::new();
         let mut prop_types: Vec<String> = Vec::new();
         let mut first_batch = true;
@@ -173,7 +265,7 @@ mod geoparquet_impl {
                         break;
                     }
                     let col = batch.column(col_idx);
-                    properties.push(extract_property_value(col.as_ref(), row));
+                    properties.push(extract_property_value(col.as_ref(), row)?);
                     prop_col_idx += 1;
                 }
 
@@ -313,11 +405,11 @@ mod geoparquet_impl {
         wkb_bytes.and_then(wkb_to_geometry)
     }
 
-    fn extract_property_value(col: &dyn Array, row: usize) -> PropertyValue {
+    fn extract_property_value(col: &dyn Array, row: usize) -> Result<PropertyValue, String> {
         if col.is_null(row) {
-            return PropertyValue::Null;
+            return Ok(PropertyValue::Null);
         }
-        match col.data_type() {
+        Ok(match col.data_type() {
             DataType::Boolean => PropertyValue::Bool(col.as_boolean().value(row)),
             DataType::Int8 => PropertyValue::Int(
                 col.as_primitive::<arrow_array::types::Int8Type>()
@@ -375,13 +467,59 @@ mod geoparquet_impl {
             DataType::LargeUtf8 => {
                 PropertyValue::String(col.as_string::<i64>().value(row).to_string())
             }
+            DataType::Date32
+            | DataType::Date64
+            | DataType::Timestamp(_, _)
+            | DataType::Time32(_)
+            | DataType::Time64(_) => {
+                // Vector tiles have no temporal type. Preserve the value as ISO text.
+                use arrow_cast::display::{ArrayFormatter, FormatOptions};
+                // Zoned Arrow timestamps are epoch instants. Display them in UTC
+                // without requiring a timezone database or losing the offset.
+                let utc = if let DataType::Timestamp(unit, Some(_)) = col.data_type() {
+                    Some(arrow_array::make_array(
+                        col.to_data()
+                            .into_builder()
+                            .data_type(DataType::Timestamp(unit.clone(), Some("+00:00".into())))
+                            .build()
+                            .map_err(|e| format!("Cannot format timestamp: {e}"))?,
+                    ))
+                } else {
+                    None
+                };
+                let options = FormatOptions::default().with_datetime_format(Some("%Y-%m-%d"));
+                let formatter = ArrayFormatter::try_new(utc.as_deref().unwrap_or(col), &options)
+                    .map_err(|e| format!("Cannot format temporal property: {e}"))?;
+                PropertyValue::String(
+                    formatter
+                        .value(row)
+                        .try_to_string()
+                        .map_err(|e| format!("Cannot format temporal property: {e}"))?,
+                )
+            }
             _ => PropertyValue::Null,
-        }
+        })
     }
 }
 
 #[cfg(feature = "geoparquet")]
 pub use geoparquet_impl::parquet_to_layers;
+#[cfg(feature = "geoparquet")]
+pub use geoparquet_impl::ParquetPointSource;
+
+/// SQL text transport for temporal and other non-numeric properties. Zoned
+/// timestamps use UTC regardless of the connection's TimeZone setting, without ICU.
+#[cfg(feature = "duckdb")]
+pub(crate) fn duckdb_text_expr(ident: &str, dtype: &str) -> String {
+    let dt = dtype.trim().to_uppercase();
+    if matches!(dt.as_str(), "TIMESTAMP WITH TIME ZONE" | "TIMESTAMPTZ") {
+        format!("CASE WHEN isfinite({ident}) THEN replace(CAST(make_timestamp(epoch_us({ident})) AS VARCHAR), ' ', 'T') || 'Z' ELSE CAST({ident} AS VARCHAR) END")
+    } else if dt.starts_with("TIMESTAMP") {
+        format!("replace(CAST({ident} AS VARCHAR), ' ', 'T')")
+    } else {
+        format!("CAST({ident} AS VARCHAR)")
+    }
+}
 
 // ---------------------------------------------------------------------------
 // DuckDB file input
@@ -478,33 +616,34 @@ mod duckdb_impl {
         })?;
 
         let geom_col_lower = geom_col_name.to_lowercase();
+        let skip_cols: Vec<String> = vec![geom_col_lower, "__wkb".into()];
         let mut prop_names: Vec<String> = Vec::new();
-        let mut prop_col_indices: Vec<usize> = Vec::new();
         let mut prop_types: Vec<String> = Vec::new();
         let mut prop_value_kinds: Vec<DuckDbValueKind> = Vec::new();
+        let mut projection = Vec::new();
 
-        // The geometry column is dropped from the projection (SELECT * EXCLUDE)
-        // and replaced by a trailing __wkb blob: DuckDB's native GEOMETRY type
-        // (e.g. from read_parquet) is not materializable by duckdb-rs, but
-        // ST_AsWKB(...) is. Track output positions so the property column
-        // indices line up with the EXCLUDE-d projection.
-        let mut out_idx = 0usize;
-        for (name, dtype) in all_columns.iter() {
-            if name.to_lowercase() == geom_col_lower {
+        for (name, dtype) in &all_columns {
+            let name_lower = name.to_lowercase();
+            if skip_cols.contains(&name_lower) {
                 continue;
             }
             prop_names.push(name.clone());
-            prop_col_indices.push(out_idx);
             prop_types.push(duckdb_type_to_property_type(dtype));
-            prop_value_kinds.push(duckdb_type_to_value_kind(dtype));
-            out_idx += 1;
+            let kind = duckdb_type_to_value_kind(dtype);
+            let ident = format!("\"{}\"", name.replace('"', "\"\""));
+            projection.push(if matches!(kind, DuckDbValueKind::String) {
+                format!("{} AS {ident}", duckdb_text_expr(&ident, dtype))
+            } else {
+                ident
+            });
+            prop_value_kinds.push(kind);
         }
-        let wkb_col_idx = out_idx;
 
-        // Detect source CRS via ST_SRID on the first non-null geometry
+        let geom_ident = format!("\"{}\"", geom_col_name.replace('"', "\"\""));
+        // Detect source CRS via ST_CRS on the first non-null geometry.
         let srid_sql = format!(
-            "SELECT ST_SRID(\"{}\") AS __srid FROM ({}) AS __t WHERE \"{}\" IS NOT NULL LIMIT 1",
-            geom_col_name, sql, geom_col_name
+            "SELECT ST_CRS({}) AS __srid FROM ({}) AS __t WHERE {} IS NOT NULL LIMIT 1",
+            geom_ident, sql, geom_ident
         );
         let source_srid: Option<String> = conn
             .query_row(&srid_sql, params![], |row| row.get::<_, String>(0))
@@ -514,20 +653,22 @@ mod duckdb_impl {
         let geom_expr = match source_srid.as_deref() {
             // Already WGS84 or unknown — use as-is
             None | Some("EPSG:4326") | Some("") => {
-                format!("ST_AsWKB(\"{}\")", geom_col_name)
+                format!("ST_AsWKB({})", geom_ident)
             }
             Some(src_crs) => {
                 format!(
-                    "ST_AsWKB(ST_Transform(\"{}\", '{}', 'EPSG:4326'))",
-                    geom_col_name, src_crs
+                    "ST_AsWKB(ST_Transform({}, '{}', 'EPSG:4326', always_xy := true))",
+                    geom_ident,
+                    src_crs.replace('\'', "''")
                 )
             }
         };
 
-        let wkb_sql = format!(
-            "SELECT * EXCLUDE (\"{}\"), {} AS __wkb FROM ({}) AS __t",
-            geom_col_name, geom_expr, sql
-        );
+        // Return only properties and WKB. Exporting the original CRS-bearing
+        // GEOMETRY column through DuckDB's Arrow result can fail (#19).
+        let wkb_col_idx = projection.len();
+        projection.push(format!("{} AS __wkb", geom_expr));
+        let wkb_sql = format!("SELECT {} FROM ({}) AS __t", projection.join(", "), sql);
 
         let mut stmt = conn
             .prepare(&wkb_sql)
@@ -550,7 +691,7 @@ mod duckdb_impl {
             };
 
             let mut properties = Vec::with_capacity(prop_names.len());
-            for (&col_idx, &kind) in prop_col_indices.iter().zip(prop_value_kinds.iter()) {
+            for (col_idx, &kind) in prop_value_kinds.iter().enumerate() {
                 properties.push(extract_value(row, col_idx, kind));
             }
 

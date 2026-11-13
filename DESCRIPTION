@@ -1,19 +1,21 @@
 Package: freestiler
 Title: Create Vector Tiles from Spatial Data
-Version: 0.3.0
-Date: 2026-06-24
+Version: 0.3.0.9000
+Date: 2026-10-04
 Authors@R: c(
     person("Kyle", "Walker", , "kyle@walker-data.com", role = c("aut", "rev")),
     person("Jimmy", "Briggs", , "jimmy.briggs@noclocks.dev", role = c("ctb", "cre"),
-           comment = c(ORCID = "0000-0002-7489-8787"))
+           comment = c(ORCID = "0000-0002-7489-8787")),
+    person("Mapbox", role = "cph", comment = "Supercluster code (ISC)"),
+    person("Vladimir", "Agafonkin", role = "cph", comment = "KDBush code (ISC)")
   )
-Description: A forked, windows-specific build of the original freestiler
-    package which provides features to create vector tile archives in
-    'PMTiles' format from 'sf' spatial data frames. Supports 'Mapbox
-    Vector Tile' ('MVT') and 'MapLibre Tile' ('MLT') output formats. Uses
-    a 'Rust' backend via 'extendr' for fast, in-memory tiling with zero
-    external system dependencies.
+Description: A forked, Windows-focused build of freestiler that creates vector
+    tile archives in 'PMTiles' format from 'sf' spatial data frames, files, and
+    DuckDB SQL. Supports 'Mapbox Vector Tile' ('MVT') and 'MapLibre Tile'
+    ('MLT') output formats. Uses a 'Rust' backend via 'extendr' with native
+    DuckDB and GeoParquet support compiled in.
 License: MIT + file LICENSE
+Copyright: See inst/COPYRIGHTS for incorporated Supercluster and KDBush code.
 URL: https://github.com/jimbrig/freestiler,
     http://docs.jimbrig.com/freestiler/
 BugReports: https://github.com/jimbrig/freestiler/issues
@@ -30,6 +32,8 @@ Imports:
     viridisLite
 Suggests:
     arrow,
+    callr,
+    curl,
     knitr,
     quarto,
     stats,
@@ -40,4 +44,5 @@ Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
 SystemRequirements: Cargo (Rust's package manager), rustc >= 1.77.2

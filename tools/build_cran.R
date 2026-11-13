@@ -68,11 +68,16 @@ cran_toml <- c(
   'edition = "2021"',
   'rust-version = "1.77.2"',
   'description = "Core Rust engine for building PMTiles vector tilesets"',
-  'license = "MIT"',
+  grep('^license = ', orig, value = TRUE)[1],
   'publish = false',
   '',
   '[features]',
   'default = []',
+  '# Declare disabled features for rustc check-cfg without optional dependencies.',
+  'geoparquet = []',
+  'duckdb = []',
+  'fastpfor = []',
+  'fsst = []',
   '',
   '[dependencies]',
   'geo = "0.29"',
@@ -95,11 +100,9 @@ cran_toml <- c(
 )
 writeLines(cran_toml, core_toml)
 
-# Strip optional feature forwarding from root Cargo.toml
+# Keep feature names for check-cfg, without forwarding to optional dependencies.
 root_lines <- readLines(root_toml)
-root_lines <- root_lines[
-  !grepl("^(geoparquet|duckdb|fastpfor|fsst) =", root_lines)
-]
+root_lines <- sub("^(geoparquet|duckdb|fastpfor|fsst) =.*$", "\\1 = []", root_lines)
 writeLines(root_lines, root_toml)
 
 # --- Step 3: Re-vendor with stripped deps ---

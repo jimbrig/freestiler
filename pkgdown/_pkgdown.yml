@@ -15,13 +15,8 @@ navbar:
   bg: '#2b4a2b'
   type: dark
   structure:
-    left:
-    - intro
-    - reference
-    - articles
-    right:
-    - search
-    - github
+    left: [intro, reference, articles, news]
+    right: [search, github]
   components:
     articles:
       text: Articles
@@ -30,6 +25,8 @@ navbar:
         href: articles/getting-started.html
       - text: Mapping with mapgl
         href: articles/mapping.html
+      - text: Point clustering
+        href: articles/point-clustering.html
       - text: Hexagonal binning with H3
         href: articles/h3-hexagonal-binning.html
       - text: '---'
@@ -62,7 +59,9 @@ articles:
   contents: mapping
 - title: Dynamic Binning
   navbar: ~
-  contents: h3-hexagonal-binning
+  contents:
+  - h3-hexagonal-binning
+  - point-clustering
 - title: Technical Details
   navbar: ~
   contents: maplibre-tiles

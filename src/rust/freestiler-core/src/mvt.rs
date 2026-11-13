@@ -96,7 +96,7 @@ pub fn encode_tile_multilayer(
         let mut keys: Vec<String> = Vec::new();
         let mut key_map: HashMap<String, u32> = HashMap::new();
         let mut values: Vec<Value> = Vec::new();
-        let mut value_map: HashMap<String, u32> = HashMap::new();
+        let mut value_map: HashMap<PropKey, u32> = HashMap::new();
         let mut tile_features: Vec<TileFeature> = Vec::new();
 
         for feature in features {
@@ -121,18 +121,25 @@ pub fn encode_tile_multilayer(
                 }
 
                 let key_name = &property_names[i];
-                let key_idx = *key_map.entry(key_name.clone()).or_insert_with(|| {
-                    let idx = keys.len() as u32;
-                    keys.push(key_name.clone());
-                    idx
-                });
+                let key_idx = match key_map.get(key_name.as_str()) {
+                    Some(&idx) => idx,
+                    None => {
+                        let idx = keys.len() as u32;
+                        keys.push(key_name.clone());
+                        key_map.insert(key_name.clone(), idx);
+                        idx
+                    }
+                };
 
-                let value_key = property_value_key(prop);
-                let value_idx = *value_map.entry(value_key).or_insert_with(|| {
-                    let idx = values.len() as u32;
-                    values.push(property_to_value(prop));
-                    idx
-                });
+                let value_idx = match value_map.get(&PropKey::from(prop)) {
+                    Some(&idx) => idx,
+                    None => {
+                        let idx = values.len() as u32;
+                        values.push(property_to_value(prop));
+                        value_map.insert(PropKey::from(prop), idx);
+                        idx
+                    }
+                };
 
                 tags.push(key_idx);
                 tags.push(value_idx);
@@ -258,6 +265,7 @@ fn encode_linestring_cmds(
         return Vec::new();
     }
 
+    let (start_x, start_y) = (*cx, *cy);
     let mut cmds = Vec::new();
 
     // MoveTo first point
@@ -288,6 +296,9 @@ fn encode_linestring_cmds(
     }
 
     if count == 0 {
+        // No commands were emitted, so the next part must use the old cursor.
+        *cx = start_x;
+        *cy = start_y;
         return Vec::new();
     }
 
@@ -333,14 +344,26 @@ fn encode_quant_ring_cmds(coords: &[(i32, i32)], cx: &mut i32, cy: &mut i32) -> 
     cmds
 }
 
-/// Create a unique string key for a property value (for deduplication)
-fn property_value_key(prop: &PropertyValue) -> String {
-    match prop {
-        PropertyValue::String(s) => format!("s:{}", s),
-        PropertyValue::Int(i) => format!("i:{}", i),
-        PropertyValue::Double(d) => format!("d:{}", d),
-        PropertyValue::Bool(b) => format!("b:{}", b),
-        PropertyValue::Null => "null".to_string(),
+/// Borrowed dictionary key for value deduplication: probing the map allocates
+/// nothing, and doubles are keyed by their bit pattern so Eq/Hash are total.
+#[derive(PartialEq, Eq, Hash)]
+enum PropKey<'a> {
+    Str(&'a str),
+    Int(i64),
+    Double(u64),
+    Bool(bool),
+    Null,
+}
+
+impl<'a> From<&'a PropertyValue> for PropKey<'a> {
+    fn from(prop: &'a PropertyValue) -> Self {
+        match prop {
+            PropertyValue::String(s) => PropKey::Str(s),
+            PropertyValue::Int(i) => PropKey::Int(*i),
+            PropertyValue::Double(d) => PropKey::Double(d.to_bits()),
+            PropertyValue::Bool(b) => PropKey::Bool(*b),
+            PropertyValue::Null => PropKey::Null,
+        }
     }
 }
 
@@ -364,5 +387,104 @@ fn property_to_value(prop: &PropertyValue) -> Value {
             ..Default::default()
         },
         PropertyValue::Null => Value::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use geo_types::{Coord, LineString, MultiLineString};
+
+    fn geographic(coord: &TileCoord, x: f64, y: f64) -> Coord<f64> {
+        let bounds = tile_bounds(coord);
+        let north = bounds.max().y.to_radians().tan().asinh();
+        let south = bounds.min().y.to_radians().tan().asinh();
+        Coord {
+            x: bounds.min().x + x / EXTENT as f64 * (bounds.max().x - bounds.min().x),
+            y: (north - y / EXTENT as f64 * (north - south))
+                .sinh()
+                .atan()
+                .to_degrees(),
+        }
+    }
+
+    fn decoded_lines(coord: &TileCoord, geometry: Geometry) -> Vec<Vec<(i32, i32)>> {
+        let features = [Feature {
+            id: Some(1),
+            geometry,
+            properties: vec![],
+        }];
+        let bytes = encode_tile_multilayer(coord, &[("lines", &[], &features)]);
+        let tile = Tile::decode(bytes.as_slice()).unwrap();
+        let commands = &tile.layers[0].features[0].geometry;
+        let mut lines: Vec<Vec<(i32, i32)>> = Vec::new();
+        let (mut x, mut y, mut i) = (0, 0, 0);
+        while i < commands.len() {
+            let command = commands[i];
+            i += 1;
+            let id = command & 7;
+            assert!(id == CMD_MOVE_TO || id == CMD_LINE_TO);
+            for _ in 0..(command >> 3) {
+                let unzigzag = |v: u32| (v >> 1) as i32 ^ -((v & 1) as i32);
+                x += unzigzag(commands[i]);
+                y += unzigzag(commands[i + 1]);
+                i += 2;
+                if id == CMD_MOVE_TO {
+                    lines.push(Vec::new());
+                }
+                lines.last_mut().unwrap().push((x, y));
+            }
+        }
+        lines
+    }
+
+    #[test]
+    fn collapsed_multipart_line_preserves_cursor() {
+        let tile = TileCoord { z: 4, x: 3, y: 6 };
+        let line = |points: &[(f64, f64)]| {
+            LineString(
+                points
+                    .iter()
+                    .map(|&(x, y)| geographic(&tile, x, y))
+                    .collect(),
+            )
+        };
+        let collapsed = line(&[(1000.1, 1000.1), (1000.2, 1000.2)]);
+        let visible = line(&[(2000.0, 1500.0), (2500.0, 1800.0)]);
+        // Exercise both a zero cursor and one advanced by an earlier visible part.
+        for prefix in [false, true] {
+            let mut parts = Vec::new();
+            let mut expected = Vec::new();
+            if prefix {
+                parts.push(line(&[(500.0, 600.0), (700.0, 800.0)]));
+                expected.push(vec![(500, 600), (700, 800)]);
+            }
+            parts.extend([collapsed.clone(), visible.clone()]);
+            expected.push(vec![(2000, 1500), (2500, 1800)]);
+            assert_eq!(
+                decoded_lines(&tile, Geometry::MultiLineString(MultiLineString(parts))),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn collapsed_clipped_line_preserves_cursor() {
+        let tile = TileCoord { z: 4, x: 3, y: 6 };
+        // The west buffer edge is -204.8 tile units (5% of the 4096 extent).
+        // Exit after a tiny first piece, travel outside, then re-enter farther south.
+        let source = Geometry::LineString(LineString(vec![
+            geographic(&tile, -204.79, 1000.0),
+            geographic(&tile, -225.0, 1000.0),
+            geographic(&tile, -225.0, 2000.0),
+            geographic(&tile, 300.0, 2000.0),
+        ]));
+        let clipped = crate::clip::clip_geometry_to_tile(&source, &tile).unwrap();
+        assert!(matches!(&clipped, Geometry::MultiLineString(parts) if parts.0.len() == 2));
+        // Encode without simplify_geometry(), matching simplification = FALSE.
+        assert_eq!(
+            decoded_lines(&tile, clipped),
+            vec![vec![(-205, 2000), (300, 2000)]]
+        );
     }
 }

@@ -1,6 +1,9 @@
 ^\.Rproj\.user$
 ^.*\.Rproj$
 ^\.gitignore$
+^\.git$
+^cran-comments\.md$
+^turbines\.csv$
 ^LICENSE\.md$
 ^src/\.cargo$
 ^src/Makevars$
@@ -26,6 +29,9 @@
 ^tools/install\.R$
 ^tools/build\.R$
 ^tools/feature-smoke\.R$
+^tools/supercluster-compat$
+^tools/check_upstream_licenses\.py$
+^src/rust/freestiler-core/tests$
 ^justfile$
 ^vignettes$
 ^\.positai$

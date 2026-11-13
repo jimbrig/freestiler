@@ -32,5 +32,16 @@ Other contributors:
   \item Jimmy Briggs \email{jimmy.briggs@noclocks.dev} (\href{https://orcid.org/0000-0002-7489-8787}{ORCID}) [contributor]
 }
 
+Authors:
+\itemize{
+  \item Kyle Walker \email{kyle@walker-data.com}
+}
+
+Other contributors:
+\itemize{
+  \item Mapbox (Supercluster code (ISC)) [copyright holder]
+  \item Vladimir Agafonkin (KDBush code (ISC)) [copyright holder]
+}
+
 }
 \keyword{internal}
