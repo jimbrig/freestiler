@@ -123,7 +123,8 @@ product, not picking a winner.
 **Min-schema:** `ST_Read` / `SELECT *` will pull every column. For
 parcels that is the difference between a viable tile and a multi-GB
 attribute bomb. File API should accept `sql` or `columns=` even for
-“file” inputs (artifactviewer already wraps hive as `freestile_query`).
+“file” inputs (hive / multi-file sources can already go through
+`freestile_query` when a projection is required).
 
 ### Bounded memory / chunk caps
 
