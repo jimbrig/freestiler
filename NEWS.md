@@ -1,5 +1,19 @@
 # freestiler 0.3.0.9000
 
+## Fork notes (jimbrig/freestiler)
+
+* Synced with upstream `0.3.0.9000` while keeping always-on Rust DuckDB +
+  GeoParquet on Windows native builds.
+* Dropped the Python package tree from this fork; R + `freestiler-core` only.
+* Repo layout: `tools/install.R` / `tools/build.R`, root `justfile`, pkgdown
+  config under `pkgdown/`, site published from `gh-pages` (no committed `docs/`).
+* Dropped in-tree CRAN submission notes (`cran-comments.md`); this fork targets
+  GitHub / r-universe installs.
+* Windows `PKG_LIBS` now includes `-lsynchronization` so Rust std futex APIs
+  (`WaitOnAddress` / `WakeByAddress*`) link into the R DLL.
+
+## Upstream (merged)
+
 * `freestile()` now accepts `category`, `category_values`, and
   `cluster_min_points` for a single POINT sf object or GeoDataFrame. Category
   counts use the same Supercluster engine as file clustering, with individual

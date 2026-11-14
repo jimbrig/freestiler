@@ -194,67 +194,45 @@ gpio “max bytes per chunk” maps onto `read_batch_size` plus a **hard
 error** if a single feature/row-group exceeds the cap (vertex bombs),
 not a silent stall.
 
-## Make `artifactviewer`'s "tileset recipe" Concept a more robust implementation
+## Tileset “recipe” concept (external inspiration)
 
-See [dev/references/artifactviewer](../references/artifactviewer) and various example workflows related to that from its examples folder as well as throughout G:/SpatialData/catalog or G:/SpatialData/_archive as well.
+Prior art for a durable recipe object lives in catalog / artifact-viewer style
+workflows (measure → derive encode args → first-paint). Capture stable
+requirements in [`recipe_decisions.md`](recipe_decisions.md) and
+[`tile-recipe-spec.md`](tile-recipe-spec.md); do not treat local clones or
+private catalogs as the design record.
 
-## "Overviews"
+## Overviews
 
-See links below related to examples of overviews in tylertoo and the custom geoparquet and flatgeobuf examples also.
+See public tylertoo / GeoParquet overview docs in Resources below. Overview
+ladders (`geo:overviews`) are Theme B intermediates, not a v1 hard dependency.
 
-## GeoParquet Interoperability and Nuances
+## GeoParquet interoperability and nuances
 
-This section deals with the interoperability and current state of the GeoParquet specification and nuances relevant to its use as a possible input source format for this package and how it is read by the underlying bindings to duckdb and/or geoparquet rust crates.
+Relevant to freestiler as an input format and to how DuckDB vs native
+GeoParquet crates read metadata/CRS under GeoParquet 1.1 vs 2.0 flux.
 
-For a specific in-depth look into these nuances as it relates to GDAL vs. DuckDB vs. `gpio` etc. see the symlink'd reference [here](../references/tiger) (uses TIGER as an example dataset).
+GDAL’s Parquet driver can apply GeoParquet 2.0 native spatial types without
+implementing the rest of the 2.0 surface (including how version is written).
+That divergence vs DuckDB / other readers still matters for a flexible input
+story. Prefer public references over local fixture trees:
 
-The main item related to freestiler here would simply be the ability to have a more flexible GeoParuqt reader supported given the specification's current state of flux between versions 1.1 and 2.0 and how metadata and CRS information is handled and the divergence between core tooling such as GDAL's Parquet driver (which supports applying GeoParquet's 2.0 native Parquet spatial types, but not any other aspect of the 2.0 specification including the version written to the file, etc.) and how this all affects the ability to read and write GeoParquet files with a consistent and reliable API.
-
-This may have already been resolved or addressed for the particular issue regarding the different methods that DuckDB vs. native GeoParuqet read a GeoParquet 2.0 versioned input source, as it seems like both engines work with a 2.0 input source now whereas in the past I encountered issues related to duckdb attempting to read the data and not detecting a CRS in the expected location, etc.
-
-So this is more or less a general comment pertaining to providing optimal flexibilty of input sources that are GeoParquet and a good resource for this is how the [GPQ Workbench (geopq-workbench)](https://github.com/gsueur/geopq-workbench) Desktop application handles this and provides very flexible reading across all GeoParquet versions, encodings, etc.
-
-See also these resources on this exact topic from GeoMermaids:
-
-- https://www.geomermaids.com/cookbook/reading/
-- https://www.geomermaids.com/cookbook/geoparquet/
-
-and the original GeoParquet best practices:
-
+- [GPQ Workbench](https://github.com/gsueur/geopq-workbench) — flexible reading across versions/encodings
+- GeoMermaids: [reading](https://www.geomermaids.com/cookbook/reading/), [geoparquet](https://www.geomermaids.com/cookbook/geoparquet/)
 - [Distributing GeoParquet Best Practices](https://raw.githubusercontent.com/opengeospatial/geoparquet/refs/heads/main/format-specs/distributing-geoparquet.md)
 
-it should also be noted the GDAL specific nuance related to the CRS as well, i.e. see the output below for a 2.0 GeoParquet input source:
+Known footgun: some GeoParquet 2.0 files report absurd GDAL extents when axis
+order / CRS tagging is wrong for the reader. Readers must validate CRS and
+extent sanity, not trust a single engine’s first parse.
 
-```powershell
-➜ gdal vector info G:\SpatialData\_archive\tiger\parquet_v2.0\tl_2025_us_state.v2.parquet
-INFO: Open of `G:\SpatialData\_archive\tiger\parquet_v2.0\tl_2025_us_state.v2.parquet'
-      using driver `Parquet' successful.
+## Serving tiles via HTTP
 
-Layer name: tl_2025_us_state.v2
-Geometry: Multi Polygon
-Feature Count: 49
-Extent: (-671604551436814304028451120606636464366061660299656192103590393396896035589919414244307964172914637647252718864843161010117589743084309988391614614849191936.000000, -19931520357091704125079374090812266452464462356380303066054619741023361487226383938795964098567940398706898277320622080.000000) - (0.000000, -0.000000)
-Layer Coordinate Reference System:
-  - name: WGS 84
-  - ID: EPSG:4326
-  - type: Geographic 2D
-  - area of use: World, west -180.00, south -90.00, east 180.00, north 90.00
-Data axis to CRS axis mapping: 2,1
-Geometry Column = geometry
-geoid: String (0.0)
-state_fips: String (0.0)
-state_abbr: String (0.0)
-state_name: String (0.0)
-area_land_m2: Integer64 (0.0)
-area_water_m2: Integer64 (0.0)
-```
+Today: [`R/serve.R`](../../R/serve.R) (`httpuv`) for local archive HTTP + Range.
+Alternatives worth evaluating (not committed):
 
-
-## Serving Tiles via HTTP
-
-Currently the package supports serving tiles via HTTP as seen in the [R/serve.R](../../R/serve.R) file's source code which uses an `httpuv` based implementation which is somewhat limited. The other primary way I have been serving tiles locally is using `bunx http-server` called from `processx`, i.e. I added an example to [dev/examples/tiles_serve.R](../examples//tiles_serve.R). However, I recently came across this interesting library [sounkou-bioinfo/goServeR](https://github.com/sounkou-bioinfo/goServeR) which applies a sophisticated HTTP(S) File Server with range request support bakes in and unbounded CORS using `Go` and compilled C source code around the Go server. I will need to evaluate this further and see if it is a good fit for the package as there are various tradeoffs to consider, but that approach would provide the most robust support for managing the underlying HTTP server while leveraging as performant and multi-threaded implementation as possible via golang. Definitely worth considering.
-
-Another idea would be a more complete solution (likely in addition to the more basic lightweight http file serving approach) that could use a more official `plumber2` full supporting API tile server implementation (note: `plumber2` NOT `plumber` - https://github.com/posit-dev/plumber2/).
+- External static servers (any CORS + Range capable file server) for large archives
+- [sounkou-bioinfo/goServeR](https://github.com/sounkou-bioinfo/goServeR) — Go-backed Range + CORS
+- [plumber2](https://github.com/posit-dev/plumber2/) — fuller API/tile server surface later (Theme C)
 
 ## GDAL PMTiles Driver & `/vsipmtiles/`
 

@@ -1,43 +1,54 @@
 # freestiler fork
 
-This fork mirrors upstream `walkerke/freestiler` for the R package while
-always compiling native builds with Rust GeoParquet and Rust DuckDB enabled.
-Python packaging is not part of this fork (see upstream for that).
+R-oriented fork of `walkerke/freestiler` with **always-on** Rust GeoParquet +
+DuckDB on native builds (including Windows). Python is not maintained here.
 
 ## purpose
 
-- produce PMTiles from `sf`, file input, and DuckDB SQL
-- preserve upstream architecture (`rextendr` + standalone `src/rust` crates)
-- keep Windows source builds reliable
-- focus on R package workflows only
+- PMTiles from `sf`, files, and DuckDB SQL via `rextendr` + `src/rust` crates
+- Keep Windows source builds reliable (`tools/config.R`, Rtools GNU)
+- Prefer implementing capability in **`freestiler-core` first**, then thin R
+  (and optionally a Rust CLI). Avoid R-only APIs that cannot be expressed in core.
 
 ## build, install, test, check
 
-Preferred entrypoint is [`just`](https://github.com/casey/just) from the repo root:
+[`just`](https://github.com/casey/just) from the repo root:
 
-- `just install` — local source install into the user library (`tools/install.R`)
-- `just build` — feature-enabled isolated build into `build/library/` (`tools/build.R`)
-- `just test` — `devtools::test()`
-- `just check` — `devtools::check()`
-- `just document` — `devtools::document()`
-- `just smoke` — `tools/feature-smoke.R` requiring Rust DuckDB + GeoParquet
-- `just site` — local pkgdown build into gitignored `docs/`
+| Recipe | Action |
+|--------|--------|
+| `just install` | `tools/install.R` → user library |
+| `just build` | `tools/build.R` → `build/library/` |
+| `just test` | `devtools::test()` |
+| `just check` | `devtools::check()` |
+| `just document` | `devtools::document()` |
+| `just smoke` | feature-smoke requiring Rust DuckDB + GeoParquet |
+| `just site` | local pkgdown into gitignored `docs/` |
 
-Also:
+Also: `pak::pak("jimbrig/freestiler")`, `testthat::test_file("tests/testthat/<file>.R")`.
 
-- install from github: `pak::pak("jimbrig/freestiler")`
-- run a test file: `testthat::test_file("tests/testthat/<file>.R")`
+Windows link note: `src/Makevars.win.in` must keep `-lsynchronization` for Rust
+std futex APIs (`WaitOnAddress` / `WakeByAddress*`).
 
 ## docs and metadata
 
-- refresh DESCRIPTION/NAMESPACE via attachment config: `attachment::att_amend_desc()`
-- regenerate docs: `just document` or `devtools::document()`
-- site config: `pkgdown/_pkgdown.yml`; CI deploys to the `gh-pages` branch
+- `attachment::att_amend_desc()` when refreshing DESCRIPTION/NAMESPACE
+- Site config: `pkgdown/_pkgdown.yml`; CI deploys to **`gh-pages`** (do not commit `docs/`)
+- Planning notes: `dev/docs/` (not part of the R package tarball). Treat tracked
+  notes like code: durable decisions, open questions, public URLs — never
+  machine-local paths or gitignored scratch trees as the design record.
+
+## product themes (near-term)
+
+1. **A — API parity** — multi-layer / engines / knobs for file+query paths (core + LayeredTiler-style memory); thin R after
+2. **B — recipes / diagnostics / map packaging** — encode config + TileJSON/style skeletons; docs that prove maps
+3. **C — dynamic MVT/MLT** — single-tile encode from DuckDB/GeoParquet; serve surface after A
+
+Do not invent parallel multi-layer designs when upstream `LayeredTiler` (PR stack) can be absorbed into core.
 
 ## repo guardrails
 
-- keep `tools/config.R` aligned to always-on native `duckdb` + `geoparquet`
-- avoid one-off helper APIs that diverge from upstream unless strictly needed
-- keep CI centered on R package build/test/release (Windows build required)
-- do not commit build artifacts under `build/`, site output under `docs/`, or check output under `dev/check/`
-- do not commit `dev/references/` clones or the Python tree (removed from this fork)
+- Always-on `duckdb` + `geoparquet` in `tools/config.R` for native non-WASM builds
+- Windows CI (`r-package.yml`) required; feature smoke must assert both backends
+- No committed `python/`, `docs/` site output, `build/` artifacts, or `dev/references/` clones
+- No CRAN submission paperwork in-tree (`cran-comments.md`); this fork is GitHub / r-universe oriented
+- Do not document agent-private filesystem paths in this repository

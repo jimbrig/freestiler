@@ -1,7 +1,8 @@
 # Tile recipe — notes (pre-implementation)
 
-Status: **exploratory**. No package API yet. Experiment against real data first
-(`dev/scripts/recipe_explore.R`). Do not treat this file as a settled design.
+Status: **exploratory**. No package API yet. Do not treat this file as a
+settled design. Local throwaway probes are not part of the contract; only the
+open questions and encode targets below are meant to survive across sessions.
 
 ## What we are trying to learn
 
@@ -9,8 +10,8 @@ For a given spatial source, can we go from **measurable facts about the data**
 to a sensible set of `freestile_*` arguments — and what else (if anything)
 must be supplied by a human or by fixed SDI conventions?
 
-That question is not answered yet. The code that was briefly added to `R/`
-baked in too many answers. It has been removed.
+That question is not answered yet. Transient R helpers that baked in too many
+answers were removed on purpose.
 
 ## What freestile needs (the only hard target)
 
@@ -48,9 +49,9 @@ input required if metadata is present:
 
 ## What is *not* in the data (and is currently confusing)
 
-These showed up in the aborted R code as "assumptions." Some may become
-fixed package conventions; some may stay human inputs; some may turn out to
-be **outputs of derivation**, not inputs. Undecided:
+These showed up in aborted helpers as "assumptions." Some may become fixed
+package conventions; some may stay human inputs; some may turn out to be
+**outputs of derivation**, not inputs. Undecided:
 
 | Item | Why it appeared | Open question |
 | --- | --- | --- |
@@ -73,26 +74,28 @@ Ideas under test, not committed:
 3. Map candidates → `min_zoom`, `max_zoom`, `drop_rate` (and maybe coalesce).
 4. Record measurements + any conventions used + rationale.
 
-Hard open problems (tylertoo review still relevant here):
+Hard open problems ([tylertoo](https://github.com/geoparquet-io/tylertoo) still
+relevant here):
 
 - Dense small polygons over large extents: drop_rate alone cannot invent
   visibility at continental zooms (need representation change, multi-layer,
   or aggregates — not in freestiler encode knobs today).
 - Whether viewport-fit belongs in this package at all.
 
-## How to experiment
+## Experiment criteria (durable)
 
-Use `dev/scripts/recipe_explore.R` against real paths. It:
+Any probe that informs a future API should, at minimum:
 
-1. Measures what it can (prints clearly).
-2. Shows intermediate zoom calculations with **every constant named**.
-3. Suggests a candidate encode block as a *hypothesis*, not a package API.
-4. Writes a JSON dump for side-by-side comparison across sources.
+1. Measure what it can and print the measurements clearly.
+2. Name every constant used in zoom / drop calculations.
+3. Emit a candidate encode argument block as a *hypothesis*, not an API.
+4. Keep enough provenance to compare candidates across sources.
 
-Iterate there until the story is clear. Only then design package surface.
+Promote findings into this note (or into package code/tests) when they stabilize.
+Do not treat untracked local scripts as documentation.
 
 ## Related
 
-- Prior conversation notes and tylertoo lessons: chat history; tylertoo clone
-  under `dev/references/tylertoo/`
+- Product gaps: [`product-gaps.md`](product-gaps.md)
+- Public reference: [tylertoo](https://github.com/geoparquet-io/tylertoo)
 - Encoder gaps before fancy recipes: GitHub issues #2–#7

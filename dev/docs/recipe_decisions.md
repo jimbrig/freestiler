@@ -85,14 +85,13 @@ For hive-partitioned GeoParquet (`state_fips=13/county_fips=*`):
 | Measure | `gdalraster::GDALVector` on `.../_metadata` | N, bbox, geom, CRS, schema |
 | Sample | DuckDB | `.../county_fips=*/parcels.parquet` |
 
-Package target: **`recipe_measure(dsn)`** using GDALVector bindings (see
-`dev/sandbox/recipe_measure.R`). Sandbox `recipe_derive.R` may use
-`gdal vector info --format=json` until gdalraster is wired in — same fields,
-different access path.
+Package target: **`recipe_measure(dsn)`** using GDALVector bindings.
+Until that lands, `gdal vector info --format=json` is an acceptable probe for
+the same fields — different access path, same contract.
 
-**Do not** point DuckDB at `_metadata` (external refs). **Do not** glob the
-state folder root (`.fgb`, `.pmtiles`, etc.). Single county parquet files use
-one path for both GDAL and DuckDB.
+**Do not** point DuckDB at `_metadata` (external refs). **Do not** glob a
+partition parent that also holds sibling formats (`.fgb`, `.pmtiles`, etc.).
+Single-file parquet sources use one path for both GDAL and DuckDB.
 
 ## Always-on pipeline
 

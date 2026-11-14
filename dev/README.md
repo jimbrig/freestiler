@@ -1,20 +1,26 @@
 # dev/
 
-Local planning, experiments, and reference material for this fork.
-Not part of the R package build (see root `.Rbuildignore`).
+Maintainer-only tree. Not part of the R package tarball (root `.Rbuildignore`).
 
-## layout
+## Tracked (session-durable)
 
 | path | purpose |
 |------|---------|
-| `docs/` | Encoder/recipe notes tracked with the repo (`ideas.md`, specs) |
-| `scripts/` | Maintainer R helpers (`pkg_check.R`, `pkg_docs.R`, …) |
-| `examples/` | Scratch serving / workflow scripts |
-| `sandbox/` | One-off recipe experiments (usually untracked outputs) |
-| `extdata/` | Large local fixtures (keep out of git) |
-| `references/` | External clones for study (gitignored; do not commit) |
-| `check/` | Local `devtools::check()` output (gitignored) |
+| `docs/` | Planning notes meant to survive across sessions (`ideas.md`, product gaps, recipe questions) |
+| `scripts/` | Small maintainer helpers (`pkg_check.R`, `pkg_docs.R`) |
+| `config_attachment.yaml` | `attachment::att_amend_desc()` config |
 
-## entrypoints
+Treat tracked `docs/` like code: prefer stable decisions, open questions, and
+public URLs. Do not document machine-local paths, gitignored scratch trees, or
+ephemeral experiment filenames as if they were the design record.
 
-Package install/build/test live at the repo root via `just` (see `justfile`) and `tools/`.
+## Untracked (local only)
+
+`examples/`, `sandbox/`, `extdata/`, `references/`, and `check/` are gitignored
+scratch/output areas. They are not a documentation surface and must not be
+required for future agents to understand product direction.
+
+## Entrypoints
+
+Install / build / test / check live at the repo root via `just` and `tools/`.
+`build/` keeps only a tracked README; all install artifacts stay gitignored.

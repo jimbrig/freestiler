@@ -2,7 +2,6 @@
 ^.*\.Rproj$
 ^\.gitignore$
 ^\.git$
-^cran-comments\.md$
 ^turbines\.csv$
 ^LICENSE\.md$
 ^src/\.cargo$
