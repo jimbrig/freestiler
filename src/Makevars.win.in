@@ -8,7 +8,11 @@ STATLIB = $(LIBDIR)/libfreestiler.a
 # does not fully report: notably -lrstrtmgr (Restart Manager, used by
 # LocalFileSystem), plus -ldbghelp/-lole32/-lshell32. These are harmless when
 # DuckDB is not compiled in.
-PKG_LIBS = -L$(LIBDIR) -lfreestiler -lrstrtmgr -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll -ldbghelp -lole32 -lshell32 -luser32 -lkernel32 -lstdc++ -static-libstdc++
+#
+# -lsynchronization: Rust std futex APIs (WaitOnAddress / WakeByAddress*) live
+# in Synchronization.lib / api-ms-win-core-synch-*. Newer rustc + Rtools GNU
+# link fails without it (see CI undefined references after cargo build succeeds).
+PKG_LIBS = -L$(LIBDIR) -lfreestiler -lrstrtmgr -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll -ldbghelp -lole32 -lshell32 -luser32 -lkernel32 -lsynchronization -lstdc++ -static-libstdc++
 
 all: $(SHLIB) rust_clean
 
