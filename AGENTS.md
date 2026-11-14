@@ -57,10 +57,13 @@ Do not invent parallel multi-layer designs when upstream `LayeredTiler` (PR stac
 
 | Workflow | Role |
 |----------|------|
-| `r-package.yml` | One Windows compile per event (PR → `R CMD check`; main/tag → binary + smoke + tests). Tags `r-v*` attach the Windows zip |
+| `r-package.yml` | One Windows compile per event (PR → `R CMD check`; main → binary + smoke + tests). Successful `main` builds refresh the [`continuous`](https://github.com/jimbrig/freestiler/releases/tag/continuous) prerelease; tags `r-v*` create versioned releases |
 | `freestiler-core.yml` | Linux `cargo check/test` for the core crate (default + `geoparquet,duckdb`) |
 | `supercluster-parity.yml` | Kernel fixture parity across OS × MSRV/stable |
 | `pkgdown.yaml` | Docs-path-filtered site build → `gh-pages` |
+
+Releases: https://github.com/jimbrig/freestiler/releases — use `continuous` for the
+latest green Windows zip from `main`; cut `r-v*` for formal versions.
 
 `freestiler-core` stays `publish = false` on crates.io until a stable public Rust
 API/CLI exists. Do not add a crates.io publish job yet; when a CLI lands, prefer

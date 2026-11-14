@@ -1,17 +1,21 @@
 name: freestiler-core
 
-# Fast Rust-only feedback against the workspace lockfile.
+# Fast Rust-only feedback for freestiler-core (its own manifest + lockfile).
 # Does not replace the Windows R package job.
 on:
   pull_request:
     paths:
       - ".github/workflows/freestiler-core.yml"
-      - "src/rust/**"
+      - "src/rust/freestiler-core/**"
+      - "src/rust/Cargo.toml"
+      - "src/rust/Cargo.lock"
   push:
     branches: [main]
     paths:
       - ".github/workflows/freestiler-core.yml"
-      - "src/rust/**"
+      - "src/rust/freestiler-core/**"
+      - "src/rust/Cargo.toml"
+      - "src/rust/Cargo.lock"
   workflow_dispatch:
 
 permissions:
@@ -44,15 +48,15 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src/rust/target
-          key: ${{ runner.os }}-core-${{ matrix.label }}-${{ hashFiles('src/rust/Cargo.lock') }}
+            src/rust/freestiler-core/target
+          key: ${{ runner.os }}-core-${{ matrix.label }}-${{ hashFiles('src/rust/freestiler-core/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-core-${{ matrix.label }}-
 
-      - name: cargo check -p freestiler-core
-        working-directory: src/rust
-        run: cargo check --locked -p freestiler-core ${{ matrix.features }}
+      - name: cargo check
+        working-directory: src/rust/freestiler-core
+        run: cargo check --locked ${{ matrix.features }}
 
-      - name: cargo test -p freestiler-core --lib
-        working-directory: src/rust
-        run: cargo test --locked -p freestiler-core --lib ${{ matrix.features }}
+      - name: cargo test --lib
+        working-directory: src/rust/freestiler-core
+        run: cargo test --locked --lib ${{ matrix.features }}
