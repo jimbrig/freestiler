@@ -17,12 +17,8 @@ archive that you can drop on a static host and render with
 [view_h3_tiles()](#viewing) or your own
 [mapgl](https://walker-data.com/mapgl/) style.
 
-[`freestile_h3()`](http://docs.jimbrig.com/freestiler/reference/freestile_h3.md)
-is available in both the R and Python packages with the same arguments.
-This article uses R for the runnable examples and shows the Python
-equivalent where the two APIs differ. For Python installation, see the
-[Python Setup](http://docs.jimbrig.com/freestiler/articles/python.md)
-article.
+This article uses the R API. Upstream also ships a Python binding; this
+fork does not maintain it.
 
 ### Requirements
 
@@ -33,39 +29,34 @@ the binning. On the first call, DuckDB downloads the extension
 automatically (`INSTALL h3 FROM community`), so you need network access
 that first time.
 
-H3 binning works with the CRAN build of freestiler. It uses the R or
-Python DuckDB package, independently of the optional native Rust DuckDB
-backend.
-
-In R, install the `DBI` and `duckdb` packages (and `mapgl` for viewing):
+H3 binning works without the native Rust DuckDB backend; it uses the R
+`duckdb` package.
 
 ``` r
 
-install.packages(c("DBI", "duckdb", "mapgl"))
-```
-
-In Python, install the `h3` extra, which pulls in the `duckdb` package:
-
-``` bash
-pip install 'freestiler[h3]'
+install.packages(c("DBI", "duckdb", "mapgl", "sf"))
 ```
 
 ### Your first hex tileset
 
-Let’s tile the US Wind Turbine Database, the roughly 75,000 turbines the
-USGS tracks across the country. The API returns one row per turbine with
-a longitude, a latitude, and the turbine’s nameplate capacity in
-kilowatts.
+We’ll tile a bundled extract of the [USGS US Wind Turbine
+Database](https://energy.usgs.gov/uswtdb/) (~78k turbines: state,
+project, manufacturer, capacity, lon/lat). The CSV ships in
+`inst/extdata/` so examples do not download on every render or write
+into the working directory.
 
 ``` r
 
 library(freestiler)
 library(sf)
 
-url <- "https://energy.usgs.gov/api/uswtdb/v1/turbines?select=t_state,p_name,t_manu,t_cap,xlong,ylat"
-turbines <- jsonlite::fromJSON(url)
+turbines_csv <- system.file(
+  "extdata", "uswtdb_turbines.csv",
+  package = "freestiler",
+  mustWork = TRUE
+)
+turbines <- read.csv(turbines_csv)
 turbines$capacity_mw <- turbines$t_cap / 1000   # t_cap is in kilowatts
-
 turbines <- st_as_sf(turbines, coords = c("xlong", "ylat"), crs = 4326)
 
 freestile_h3(
@@ -75,26 +66,6 @@ freestile_h3(
   max_zoom = 12,
   base_zoom = 10
 )
-```
-
-The same call in Python takes a GeoDataFrame:
-
-``` python
-import pandas as pd
-import geopandas as gpd
-from freestiler import freestile_h3
-
-url = "https://energy.usgs.gov/api/uswtdb/v1/turbines?select=t_state,p_name,t_manu,t_cap,xlong,ylat"
-turbines = pd.read_json(url)
-turbines["capacity_mw"] = turbines["t_cap"] / 1000   # t_cap is in kilowatts
-
-turbines = gpd.GeoDataFrame(
-    turbines,
-    geometry=gpd.points_from_xy(turbines.xlong, turbines.ylat),
-    crs="EPSG:4326",
-)
-
-freestile_h3(turbines, "turbines.pmtiles", min_zoom=2, max_zoom=12, base_zoom=10)
 ```
 
 [`freestile_h3()`](http://docs.jimbrig.com/freestiler/reference/freestile_h3.md)
@@ -250,49 +221,29 @@ Python and map in R in the same session.
 
 If your points already live in DuckDB, or in a file it can read
 (Parquet, CSV, GeoPackage, or Shapefile), skip the in-memory roundtrip
-and pass SQL directly. Save the turbine coordinates to a file once, then
-let DuckDB build the geometry and the capacity column from its columns:
+and pass SQL directly. Point DuckDB at the bundled CSV (normalize the
+path for Windows):
 
 ``` r
 
-write.csv(
-  jsonlite::fromJSON(
-    "https://energy.usgs.gov/api/uswtdb/v1/turbines?select=xlong,ylat,t_cap"
-  ),
-  "turbines.csv", row.names = FALSE, na = ""
+turbines_csv <- normalizePath(
+  system.file("extdata", "uswtdb_turbines.csv", package = "freestiler", mustWork = TRUE),
+  winslash = "/"
 )
 
 freestile_h3(
-  "SELECT ST_Point(xlong, ylat) AS geometry, t_cap / 1000 AS capacity_mw
-     FROM read_csv_auto('turbines.csv')",
+  sprintf(
+    "SELECT ST_Point(xlong, ylat) AS geometry, t_cap / 1000 AS capacity_mw
+       FROM read_csv_auto('%s')",
+    turbines_csv
+  ),
   "turbines.pmtiles",
   agg = c(n = "COUNT(*)", total_mw = "SUM(capacity_mw)"),
   source_crs = "EPSG:4326"
 )
 ```
 
-The Python call is the same, with a dictionary for `agg`:
-
-``` python
-import pandas as pd
-
-pd.read_json(
-    "https://energy.usgs.gov/api/uswtdb/v1/turbines?select=xlong,ylat,t_cap"
-).to_csv("turbines.csv", index=False)
-
-freestile_h3(
-    """SELECT ST_Point(xlong, ylat) AS geometry, t_cap / 1000 AS capacity_mw
-         FROM read_csv_auto('turbines.csv')""",
-    "turbines.pmtiles",
-    agg={"n": "COUNT(*)", "total_mw": "SUM(capacity_mw)"},
-    source_crs="EPSG:4326",
-)
-```
-
-`read_csv_auto()` and `read_parquet()` are built into DuckDB, so they
-work the same from R and Python. (Reading remote files over HTTP needs
-DuckDB’s `httpfs` and `json` extensions, which the R `duckdb` package
-does not always bundle, so download to a local file first.)
+`read_csv_auto()` and `read_parquet()` are built into DuckDB.
 Multi-statement SQL works too: setup statements (`CREATE VIEW`, `LOAD`,
 and so on) run first, and the final `SELECT` is the input. Here we keep
 only the utility-scale turbines over 2 MW:
@@ -302,7 +253,7 @@ only the utility-scale turbines over 2 MW:
 freestile_h3(
   paste(
     "CREATE TEMP VIEW big AS",
-    "  SELECT * FROM read_csv_auto('turbines.csv') WHERE t_cap > 2000;",
+    sprintf("  SELECT * FROM read_csv_auto('%s') WHERE t_cap > 2000;", turbines_csv),
     "SELECT ST_Point(xlong, ylat) AS geometry, t_cap / 1000 AS capacity_mw FROM big"
   ),
   "big_turbines.pmtiles",

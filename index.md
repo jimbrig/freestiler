@@ -1,56 +1,38 @@
 # freestiler
 
 **freestiler** creates [PMTiles](https://github.com/protomaps/PMTiles)
-vector tilesets from R. Give it an sf object, a file on disk, or a
-DuckDB SQL query, and it writes a single `.pmtiles` file you can serve
-from anywhere. The tiling engine is written in Rust and runs in-process,
-so there’s nothing else to install.
+vector tilesets from R. Give it an `sf` object, a file on disk, or a
+DuckDB SQL query, and it writes a `.pmtiles` archive you can serve
+locally or from static hosting. The tiling engine is Rust
+(`freestiler-core`) linked in-process via extendr.
 
 ## About this fork
 
-This is an R-only fork of
-[walkerke/freestiler](https://github.com/walkerke/freestiler). It tracks
-upstream’s R package and API, with one deliberate difference: native
-builds **always statically compile both Rust backends into the
-package**:
+R-only fork of
+[walkerke/freestiler](https://github.com/walkerke/freestiler). Tracks
+upstream’s R API while **always** compiling both Rust backends into
+native builds (including Windows):
 
-- **Rust DuckDB** (`duckdb-rs`, bundled) — powers
-  [`freestile_query()`](http://docs.jimbrig.com/freestiler/reference/freestile_query.md)
-  and the `engine = "duckdb"` file reader, enabling out-of-R-memory,
-  file-to-file and SQL-to-tiles workflows.
-- **GeoParquet** (native Rust reader) — powers direct `.parquet` tiling
-  via
-  [`freestile_file()`](http://docs.jimbrig.com/freestiler/reference/freestile_file.md).
+| Backend | Role |
+|----|----|
+| Rust DuckDB (bundled) | [`freestile_query()`](http://docs.jimbrig.com/freestiler/reference/freestile_query.md), `engine = "duckdb"` file reads, streaming points |
+| GeoParquet (native) | Direct `.parquet` tiling via [`freestile_file()`](http://docs.jimbrig.com/freestiler/reference/freestile_file.md) |
 
-Upstream ships these off by default on Windows; here they are always on,
-including on Windows (built with the Rtools45 GNU/UCRT toolchain).
-Because DuckDB is statically linked, the result is a single
-self-contained DLL with **no external runtime dependencies** — once
-installed,
-[`library(freestiler)`](https://github.com/jimbrig/freestiler) gives you
-the full feature set with no PATH or runtime setup. This fork does
-**not** ship or maintain the Python package — use
-[walkerke/freestiler](https://github.com/walkerke/freestiler) for that.
+Upstream often disables DuckDB on Windows CRAN builds; here it is on by
+default (Rtools GNU/UCRT). The DLL is self-contained — no runtime
+DuckDB/GeoParquet install on `PATH`.
 
-## New in 0.3.0
+Python packaging is **not** maintained here; use upstream for that.
 
-Build clusters with category counts, create hexagon-only maps with
-category shares, and stream large point datasets from DuckDB. This
-release also reduces memory use when writing tiles and fixes date, CRS,
-and line-encoding issues. See the
-[changelog](https://walker-data.com/freestiler/news/index.html) for
-details.
-
-Explore the [2020 Census race and ethnicity
-map](https://walker-data.com/maps/census-2020/race.html) and [age
-map](https://walker-data.com/maps/census-2020/age.html) to see dots,
-categorical hexagons, and donut clusters together.
+Direction of travel for this fork (see
+[AGENTS.md](http://docs.jimbrig.com/freestiler/AGENTS.md) and
+[dev/docs/product-gaps.md](http://docs.jimbrig.com/freestiler/dev/docs/product-gaps.md)):
+strengthen `freestiler-core` first (layer-spec ingest, memory-honest
+multi-layer, recipes/metadata), with a possible Rust CLI as the primary
+non-R surface, then thin R bindings. Dynamic XYZ serving and style/map
+packaging are later work.
 
 ## Installation
-
-This fork is Windows-focused and always compiles the Rust GeoParquet and
-DuckDB backends in. Install it from GitHub with
-[pak](https://pak.r-lib.org):
 
 ``` r
 
@@ -58,16 +40,14 @@ DuckDB backends in. Install it from GitHub with
 pak::pak("jimbrig/freestiler")
 ```
 
-From a local clone of this repo:
+Local clone:
 
-``` r
-
-pak::local_install()
-# or: just install
+``` bash
+just install   # user library
+# or: Rscript tools/install.R
 ```
 
-Once an r-universe binary has built, you can install it without a Rust
-toolchain:
+r-universe binary (when published — no Rust toolchain required):
 
 ``` r
 
@@ -77,11 +57,8 @@ install.packages(
 )
 ```
 
-> The upstream package (Rust DuckDB off by default on Windows) is on
-> [CRAN](https://cran.r-project.org/package=freestiler) and
-> [walkerke.r-universe.dev](https://walkerke.r-universe.dev).
-
-### Verifying the Rust backends
+Upstream CRAN / walkerke.r-universe builds may still omit Rust DuckDB on
+Windows.
 
 ``` r
 
@@ -90,27 +67,10 @@ freestiler:::.has_rust_duckdb()
 freestiler:::.has_rust_geoparquet()
 ```
 
-### Building from source (maintainers)
-
-Use [`just`](https://github.com/casey/just) from the repo root (wrappers
-around `tools/install.R` and `tools/build.R`). The scripts locate Rtools
-via `pkgbuild`, isolate the build from any personal `~/.R/Makevars`, and
-verify both Rust backends are compiled in:
-
-``` bash
-just install   # user library
-just build     # isolated build/library/
-just smoke     # CI-style Rust feature checks
-just test
-```
-
-Equiv without just: `Rscript tools/install.R`, `Rscript tools/build.R`.
+Maintainer commands: `just build`, `just test`, `just smoke`,
+`just document`, `just site`.
 
 ## Quick start
-
-The main function is
-[`freestile()`](http://docs.jimbrig.com/freestiler/reference/freestile.md).
-Let’s tile the North Carolina counties dataset that ships with sf:
 
 ``` r
 
@@ -118,23 +78,20 @@ library(sf)
 library(freestiler)
 
 nc <- st_read(system.file("shape/nc.shp", package = "sf"))
-
 freestile(nc, "nc_counties.pmtiles", layer_name = "counties")
+view_tiles("nc_counties.pmtiles")
 ```
 
-That’s useful for checking your installation, but the same API handles
-much bigger data. Here we tile all 242,000 US block groups from
-[tigris](https://github.com/walkerke/tigris):
+Larger `sf` example (US block groups via
+[tigris](https://github.com/walkerke/tigris)):
 
 ``` r
 
 library(tigris)
 options(tigris_use_cache = TRUE)
 
-bgs <- block_groups(cb = TRUE)
-
 freestile(
-  bgs,
+  block_groups(cb = TRUE),
   "us_bgs.pmtiles",
   layer_name = "bgs",
   min_zoom = 4,
@@ -142,21 +99,45 @@ freestile(
 )
 ```
 
-## Viewing tiles
-
-The quickest way to view a tileset is
-[`view_tiles()`](http://docs.jimbrig.com/freestiler/reference/view_tiles.md),
-which starts a local server and opens an interactive map:
+### File and SQL input (out of R memory)
 
 ``` r
 
-view_tiles("us_bgs.pmtiles")
+freestile_file("census_blocks.parquet", "blocks.pmtiles")
+freestile_file("counties.gpkg", "counties.pmtiles", engine = "duckdb")
+
+freestile_query(
+  query = "SELECT * FROM read_parquet('blocks.parquet') WHERE state = 'NC'",
+  output = "nc_blocks.pmtiles",
+  layer_name = "blocks"
+)
+
+# large point sets — streaming (points only today)
+freestile_query(
+  query = "SELECT * FROM read_parquet('points.parquet')",
+  output = "points.pmtiles",
+  layer_name = "pts",
+  streaming = "always"
+)
 ```
 
-For more control, use
-[`serve_tiles()`](http://docs.jimbrig.com/freestiler/reference/serve_tiles.md)
-to start a local server and build your map with
-[mapgl](https://walker-data.com/mapgl/):
+### Multi-layer (sf today)
+
+``` r
+
+freestile(
+  list(
+    counties = freestile_layer(nc, min_zoom = 0, max_zoom = 10),
+    centroids = freestile_layer(st_centroid(nc), min_zoom = 6, max_zoom = 14)
+  ),
+  "nc_layers.pmtiles"
+)
+```
+
+Multi-layer from files/queries without loading `sf` is tracked work (API
+parity with the in-memory path).
+
+### Viewing with mapgl
 
 ``` r
 
@@ -175,175 +156,55 @@ maplibre(hash = TRUE) |>
     source = "bgs-src",
     source_layer = "bgs",
     fill_color = "navy",
-    fill_opacity = 0.5,
-    hover_options = list(
-      fill_color = "#ffffcc",
-      fill_opacity = 0.9
-    )
+    fill_opacity = 0.5
   )
 ```
 
-The built-in server handles CORS and range requests automatically. For
-tilesets larger than ~1 GB, use an external server like
-`npx http-server /path --cors -c-1` for better performance. See the
-[Mapping with
-mapgl](https://walker-data.com/freestiler/articles/mapping.html) article
-for a full walkthrough.
+[`serve_tiles()`](http://docs.jimbrig.com/freestiler/reference/serve_tiles.md)
+is convenience httpuv with CORS + Range. For multi-GB archives prefer an
+external range-capable server (e.g. `npx http-server … --cors -c-1`).
 
-## DuckDB queries
+## Formats and extras
 
-If your data lives in DuckDB,
-[`freestile_query()`](http://docs.jimbrig.com/freestiler/reference/freestile_query.md)
-lets you filter, join, and transform with SQL before tiling:
+- Default tile format: **MVT**; optional `tile_format = "mlt"` (MapLibre
+  Tiles).
+- H3 zoom-adaptive hex binning:
+  [`freestile_h3()`](http://docs.jimbrig.com/freestiler/reference/freestile_h3.md)
+  /
+  [`view_h3_tiles()`](http://docs.jimbrig.com/freestiler/reference/view_h3_tiles.md).
+- Categorical point clustering via `freestile(..., category = …)` (see
+  NEWS / vignettes).
 
-``` r
+## Known gaps (this fork)
 
-freestile_query(
-  query = "SELECT * FROM read_parquet('blocks.parquet') WHERE state = 'NC'",
-  output = "nc_blocks.pmtiles",
-  layer_name = "blocks"
-)
-```
+Honest limitations relative to a full “data → tiles → style → map →
+serve” pipeline are summarized in
+[dev/docs/product-gaps.md](http://docs.jimbrig.com/freestiler/dev/docs/product-gaps.md)
+(ingest parity, recipes, overviews, TileJSON/style packaging, dynamic
+serve). Short version:
 
-For very large point datasets, the streaming pipeline avoids loading the
-full result into memory. On a recent run,
-[`freestile_query()`](http://docs.jimbrig.com/freestiler/reference/freestile_query.md)
-streamed 146 million US job points from DuckDB into a 2.3 GB PMTiles
-archive in about 12 minutes:
+1.  **API parity** — multi-layer + per-layer encode knobs are richest on
+    `sf`; file/query paths are mostly single-layer today.
+2.  **Thinning defaults** — without `drop_rate` / zoom discipline,
+    archives can be huge; cartographic “recipe” tooling is not packaged
+    yet.
+3.  **Map packaging** — beyond
+    [`view_tiles()`](http://docs.jimbrig.com/freestiler/reference/view_tiles.md)
+    / mapgl glue, there is no first-class style/TileJSON/recipe export
+    for MapLibre clients.
+4.  **Dynamic tiles** — product is batch PMTiles (+ static HTTP), not
+    on-demand MVT/MLT XYZ from DuckDB/GeoParquet.
 
-``` r
-
-freestile_query(
-  query = "SELECT naics, state, ST_Point(lon, lat) AS geometry FROM jobs_dots",
-  output = "us_jobs_dots.pmtiles",
-  db_path = db_path,
-  layer_name = "jobs",
-  tile_format = "mvt",
-  min_zoom = 4,
-  max_zoom = 14,
-  base_zoom = 14,
-  drop_rate = 2.5,
-  source_crs = "EPSG:4326",
-  streaming = "always",
-  overwrite = TRUE
-)
-```
-
-## Direct file input
-
-You can tile spatial files without loading them into R first:
-
-``` r
-
-# GeoParquet
-freestile_file("census_blocks.parquet", "blocks.pmtiles")
-
-# GeoPackage, Shapefile, or other formats via DuckDB
-freestile_file("counties.gpkg", "counties.pmtiles", engine = "duckdb")
-```
-
-For GeoParquet, the direct file path is powered by the Rust `geoparquet`
-backend, which this fork always compiles in.
-[`freestile_file()`](http://docs.jimbrig.com/freestiler/reference/freestile_file.md)
-reads WKB-based GeoParquet directly without materializing the data in
-the R session first.
-
-## Dynamic hexagonal binning
-
-For dense point datasets,
-[`freestile_h3()`](http://docs.jimbrig.com/freestiler/reference/freestile_h3.md)
-aggregates points into H3 hexagons at zoom-appropriate resolutions: low
-zooms show coarse hexes summarizing whole regions, intermediate zooms
-show progressively finer hexes, and `base_zoom` and above reveal the
-underlying points. Aggregation rules are user-defined SQL (`COUNT(*)`,
-`SUM(pop)`, `AVG(value)`, …).
-
-``` r
-
-freestile_h3(
-  pts,
-  "wind.pmtiles",
-  agg = c(n = "COUNT(*)", total_mw = "SUM(capacity_mw)"),
-  min_zoom = 2, max_zoom = 12, base_zoom = 10
-)
-
-view_h3_tiles("wind.pmtiles", agg_column = "n")
-```
-
-Pass `fade = TRUE` to cross-fade between resolutions instead of swapping
-cleanly. Requires DuckDB and its [H3 community
-extension](https://duckdb.org/community_extensions/extensions/h3); see
-the [Hexagonal binning with
-H3](https://walker-data.com/freestiler/articles/h3-hexagonal-binning.html)
-article.
-
-For hexagons at every zoom, set `include_points = FALSE` and leave
-`base_zoom` unset. Add `category` and `category_values` to retain
-category counts, the most common category, its share, and ties.
-
-## Categorical point clusters
-
-With R development version 0.3.0.9000 or later from R-Universe, pass a
-POINT sf object directly to
-[`freestile()`](http://docs.jimbrig.com/freestiler/reference/freestile.md)
-to count categories within each cluster:
-
-``` r
-
-freestile(
-  places, "place_clusters.pmtiles",
-  layer_name = "places", min_zoom = 0, max_zoom = 14,
-  cluster_distance = 60, cluster_maxzoom = 10,
-  category = "kind", category_values = c("park", "museum", "library")
-)
-```
-
-The same archive contains individual points above `cluster_maxzoom`.
-Python accepts a GeoDataFrame in the same way. This path works without
-native GeoParquet or DuckDB, including in the CRAN build; it is not in
-the released 0.3.0 packages yet. See [Point
-clustering](https://walker-data.com/freestiler/articles/point-clustering.html)
-for a complete power-plant example in R and Python.
-
-## Multi-layer tilesets
-
-``` r
-
-pts <- st_centroid(nc)
-
-freestile(
-  list(
-    counties = freestile_layer(nc, min_zoom = 0, max_zoom = 10),
-    centroids = freestile_layer(pts, min_zoom = 6, max_zoom = 14)
-  ),
-  "nc_layers.pmtiles"
-)
-```
-
-## Tile formats
-
-freestiler defaults to [Mapbox Vector Tiles
-(MVT)](https://github.com/mapbox/vector-tile-spec), the widely-supported
-protobuf format that works with both MapLibre GL JS and Mapbox GL JS.
-The experimental [MapLibre Tiles
-(MLT)](https://github.com/maplibre/maplibre-tile-spec) format is also
-available via `tile_format = "mlt"` and can produce smaller files for
-polygon and line data.
+Tracked work: open issues on this repo; near-term themes in
+[AGENTS.md](http://docs.jimbrig.com/freestiler/AGENTS.md).
 
 ## Learn more
 
-- [Getting
-  Started](https://walker-data.com/freestiler/articles/getting-started.html) -
-  full tutorial
-- [Mapping with
-  mapgl](https://walker-data.com/freestiler/articles/mapping.html) -
-  viewing and styling tiles with mapgl
-- [Point
-  clustering](https://walker-data.com/freestiler/articles/point-clustering.html) -
-  clusters with category counts
-- [Hexagonal binning with
-  H3](https://walker-data.com/freestiler/articles/h3-hexagonal-binning.html) -
-  counts, summaries, and categorical hexagons
-- [MapLibre Tiles
-  (MLT)](https://walker-data.com/freestiler/articles/maplibre-tiles.html) -
-  MLT vs MVT and when to use each
+- Fork pkgdown:
+  [docs.jimbrig.com/freestiler](http://docs.jimbrig.com/freestiler/)
+  (`gh-pages`)
+- Product gaps / sequencing:
+  [dev/docs/product-gaps.md](http://docs.jimbrig.com/freestiler/dev/docs/product-gaps.md)
+- Upstream: [walker-data
+  freestiler](https://walker-data.com/freestiler/),
+  [mapgl](https://walker-data.com/mapgl/)

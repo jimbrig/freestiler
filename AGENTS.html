@@ -42,59 +42,79 @@
 
 <div id="freestiler-fork" class="section level1">
 
-<p>This fork mirrors upstream <code>walkerke/freestiler</code> for the R package while always compiling native builds with Rust GeoParquet and Rust DuckDB enabled. Python packaging is not part of this fork (see upstream for that).</p>
+<p>R-oriented fork of <code>walkerke/freestiler</code> with <strong>always-on</strong> Rust GeoParquet + DuckDB on native builds (including Windows). Python is not maintained here.</p>
 <div class="section level2">
 <h2 id="purpose">purpose<a class="anchor" aria-label="anchor" href="#purpose"></a></h2>
-<ul><li>produce PMTiles from <code>sf</code>, file input, and DuckDB SQL</li>
-<li>preserve upstream architecture (<code>rextendr</code> + standalone <code>src/rust</code> crates)</li>
-<li>keep Windows source builds reliable</li>
-<li>focus on R package workflows only</li>
+<ul><li>PMTiles from <code>sf</code>, files, and DuckDB SQL via <code>rextendr</code> + <code>src/rust</code> crates</li>
+<li>Keep Windows source builds reliable (<code>tools/config.R</code>, Rtools GNU)</li>
+<li>Prefer implementing capability in <strong><code>freestiler-core</code> first</strong>, then thin R (and optionally a Rust CLI). Avoid R-only APIs that cannot be expressed in core.</li>
 </ul></div>
 <div class="section level2">
 <h2 id="build-install-test-check">build, install, test, check<a class="anchor" aria-label="anchor" href="#build-install-test-check"></a></h2>
-<p>Preferred entrypoint is <a href="https://github.com/casey/just" class="external-link"><code>just</code></a> from the repo root:</p>
-<ul><li>
-<code>just install</code> — local source install into the user library (<code>tools/install.R</code>)</li>
-<li>
-<code>just build</code> — feature-enabled isolated build into <code>build/library/</code> (<code>tools/build.R</code>)</li>
-<li>
-<code>just test</code> — <code>devtools::test()</code>
-</li>
-<li>
-<code>just check</code> — <code>devtools::check()</code>
-</li>
-<li>
-<code>just document</code> — <code>devtools::document()</code>
-</li>
-<li>
-<code>just smoke</code> — <code>tools/feature-smoke.R</code> requiring Rust DuckDB + GeoParquet</li>
-<li>
-<code>just site</code> — local pkgdown build into gitignored <code>docs/</code>
-</li>
-</ul><p>Also:</p>
-<ul><li>install from github: <code>pak::pak("jimbrig/freestiler")</code>
-</li>
-<li>run a test file: <code>testthat::test_file("tests/testthat/&lt;file&gt;.R")</code>
-</li>
-</ul></div>
+<p><a href="https://github.com/casey/just" class="external-link"><code>just</code></a> from the repo root:</p>
+<table class="table"><thead><tr><th>Recipe</th>
+<th>Action</th>
+</tr></thead><tbody><tr><td><code>just install</code></td>
+<td>
+<code>tools/install.R</code> → user library</td>
+</tr><tr><td><code>just build</code></td>
+<td>
+<code>tools/build.R</code> → <code>build/library/</code>
+</td>
+</tr><tr><td><code>just test</code></td>
+<td><code>devtools::test()</code></td>
+</tr><tr><td><code>just check</code></td>
+<td><code>devtools::check()</code></td>
+</tr><tr><td><code>just document</code></td>
+<td><code>devtools::document()</code></td>
+</tr><tr><td><code>just smoke</code></td>
+<td>feature-smoke requiring Rust DuckDB + GeoParquet</td>
+</tr><tr><td><code>just site</code></td>
+<td>local pkgdown into gitignored <code>docs/</code>
+</td>
+</tr></tbody></table><p>Also: <code>pak::pak("jimbrig/freestiler")</code>, <code>testthat::test_file("tests/testthat/&lt;file&gt;.R")</code>.</p>
+<p>Windows link note: <code>src/Makevars.win.in</code> must keep <code>-lsynchronization</code> for Rust std futex APIs (<code>WaitOnAddress</code> / <code>WakeByAddress*</code>).</p>
+</div>
 <div class="section level2">
 <h2 id="docs-and-metadata">docs and metadata<a class="anchor" aria-label="anchor" href="#docs-and-metadata"></a></h2>
-<ul><li>refresh DESCRIPTION/NAMESPACE via attachment config: <code>attachment::att_amend_desc()</code>
-</li>
-<li>regenerate docs: <code>just document</code> or <code>devtools::document()</code>
-</li>
-<li>site config: <code>pkgdown/_pkgdown.yml</code>; CI deploys to the <code>gh-pages</code> branch</li>
+<ul><li>
+<code>attachment::att_amend_desc()</code> when refreshing DESCRIPTION/NAMESPACE</li>
+<li>Site config: <code>pkgdown/_pkgdown.yml</code>; CI deploys to <strong><code>gh-pages</code></strong> (do not commit <code>docs/</code>)</li>
+<li>Planning notes: <code>dev/docs/</code> (not part of the R package tarball). Treat tracked notes like code: durable decisions, open questions, public URLs — never machine-local paths or gitignored scratch trees as the design record.</li>
 </ul></div>
 <div class="section level2">
+<h2 id="product-themes-near-term">product themes (near-term)<a class="anchor" aria-label="anchor" href="#product-themes-near-term"></a></h2>
+<ol style="list-style-type: decimal"><li>
+<strong>A — API parity</strong> — multi-layer / engines / knobs for file+query paths (core + LayeredTiler-style memory); thin R after</li>
+<li>
+<strong>B — recipes / diagnostics / map packaging</strong> — encode config + TileJSON/style skeletons; docs that prove maps</li>
+<li>
+<strong>C — dynamic MVT/MLT</strong> — single-tile encode from DuckDB/GeoParquet; serve surface after A</li>
+</ol><p>Do not invent parallel multi-layer designs when upstream <code>LayeredTiler</code> (PR stack) can be absorbed into core.</p>
+</div>
+<div class="section level2">
 <h2 id="repo-guardrails">repo guardrails<a class="anchor" aria-label="anchor" href="#repo-guardrails"></a></h2>
-<ul><li>keep <code>tools/config.R</code> aligned to always-on native <code>duckdb</code> + <code>geoparquet</code>
-</li>
-<li>avoid one-off helper APIs that diverge from upstream unless strictly needed</li>
-<li>keep CI centered on R package build/test/release (Windows build required)</li>
-<li>do not commit build artifacts under <code>build/</code>, site output under <code>docs/</code>, or check output under <code>dev/check/</code>
-</li>
-<li>do not commit <code>dev/references/</code> clones or the Python tree (removed from this fork)</li>
+<ul><li>Always-on <code>duckdb</code> + <code>geoparquet</code> in <code>tools/config.R</code> for native non-WASM builds</li>
+<li>Windows CI (<code>r-package.yml</code>) required; feature smoke must assert both backends</li>
+<li>No committed <code>python/</code>, <code>docs/</code> site output, <code>build/</code> artifacts, or <code>dev/references/</code> clones</li>
+<li>No CRAN submission paperwork in-tree (<code>cran-comments.md</code>); this fork is GitHub / r-universe oriented</li>
+<li>Do not document agent-private filesystem paths in this repository</li>
 </ul></div>
+<div class="section level2">
+<h2 id="ci--release-surfaces">CI / release surfaces<a class="anchor" aria-label="anchor" href="#ci--release-surfaces"></a></h2>
+<table class="table"><colgroup><col width="62%"><col width="37%"></colgroup><thead><tr><th>Workflow</th>
+<th>Role</th>
+</tr></thead><tbody><tr><td><code>r-package.yml</code></td>
+<td>One Windows compile per event (PR → <code>R CMD check</code>; main/tag → binary + smoke + tests). Tags <code>r-v*</code> attach the Windows zip</td>
+</tr><tr><td><code>freestiler-core.yml</code></td>
+<td>Linux <code>cargo check/test</code> for the core crate (default + <code>geoparquet,duckdb</code>)</td>
+</tr><tr><td><code>supercluster-parity.yml</code></td>
+<td>Kernel fixture parity across OS × MSRV/stable</td>
+</tr><tr><td><code>pkgdown.yaml</code></td>
+<td>Docs-path-filtered site build → <code>gh-pages</code>
+</td>
+</tr></tbody></table><p><code>freestiler-core</code> stays <code>publish = false</code> on crates.io until a stable public Rust API/CLI exists. Do not add a crates.io publish job yet; when a CLI lands, prefer GitHub Release assets on <code>rust-v*</code> tags first.</p>
+</div>
 </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

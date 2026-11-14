@@ -1,20 +1,23 @@
 # Getting Started
 
-freestiler is a vector tile engine for R (and Python) that creates
+freestiler is a vector tile engine for R that creates
 [PMTiles](https://github.com/protomaps/PMTiles) archives from spatial
 data. You give it an sf object, a file on disk, or a DuckDB query, and
 it writes a single `.pmtiles` file you can serve from anywhere. The
 engine is written in Rust and runs in-process, so there’s nothing else
 to install.
 
+This article describes the **jimbrig/freestiler** fork, which always
+compiles Rust DuckDB and GeoParquet into native builds (including
+Windows). Upstream CRAN builds may omit those backends on Windows.
+
 The default tile format is [Mapbox Vector Tiles
-(MVT)](https://github.com/mapbox/vector-tile-spec), the widely-supported
-protobuf format that works with both MapLibre GL JS and Mapbox GL JS
-(which now supports PMTiles natively). The package also supports
-[MapLibre Tiles (MLT)](https://github.com/maplibre/maplibre-tile-spec),
-a next-generation columnar format. See the [MapLibre
+(MVT)](https://github.com/mapbox/vector-tile-spec). The package also
+supports [MapLibre Tiles
+(MLT)](https://github.com/maplibre/maplibre-tile-spec); see the
+[MapLibre
 Tiles](http://docs.jimbrig.com/freestiler/articles/maplibre-tiles.md)
-article for more on the differences.
+article.
 
 sf inputs and CRS-tagged DuckDB geometry are reprojected to WGS84
 (EPSG:4326) before tiling. When a query creates geometry from
@@ -23,41 +26,14 @@ clustering requires a GeoParquet file already in WGS84.
 
 ### Installation
 
-Install from CRAN for tiling sf objects, including ordinary point
-clustering and H3 binning:
-
 ``` r
 
-install.packages("freestiler")
-```
-
-For native GeoParquet input, categorical file clustering, or streaming
-point queries, install from
-[R-Universe](https://walkerke.r-universe.dev). Restart R before
-replacing an existing installation:
-
-``` r
-
-install.packages(
-  "freestiler",
-  repos = c("https://walkerke.r-universe.dev", "https://cloud.r-project.org")
-)
-```
-
-This fork always compiles Rust DuckDB and GeoParquet into native builds
-(including Windows). Install from GitHub with
-`pak::pak("jimbrig/freestiler")`, or from
-[jimbrig.r-universe.dev](https://jimbrig.r-universe.dev) once a binary
-is published. Upstream CRAN / walkerke.r-universe builds may still omit
-those backends on Windows — see the fork README.
-
-``` r
-
+# install.packages("pak")
 pak::pak("jimbrig/freestiler")
-
-# maintainer source install (always-on backends):
-# just install
 ```
+
+Or from [jimbrig.r-universe.dev](https://jimbrig.r-universe.dev) once a
+binary is published. Maintainers: `just install` from a local clone.
 
 ### Your first tileset
 

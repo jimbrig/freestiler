@@ -70,97 +70,118 @@
 </div>
 <!-- badges: start -->
 
-<p><strong>freestiler</strong> creates <a href="https://github.com/protomaps/PMTiles" class="external-link">PMTiles</a> vector tilesets from R. Give it an sf object, a file on disk, or a DuckDB SQL query, and it writes a single <code>.pmtiles</code> file you can serve from anywhere. The tiling engine is written in Rust and runs in-process, so there’s nothing else to install.</p>
+<p><strong>freestiler</strong> creates <a href="https://github.com/protomaps/PMTiles" class="external-link">PMTiles</a> vector tilesets from R. Give it an <code>sf</code> object, a file on disk, or a DuckDB SQL query, and it writes a <code>.pmtiles</code> archive you can serve locally or from static hosting. The tiling engine is Rust (<code>freestiler-core</code>) linked in-process via extendr.</p>
 <div class="section level2">
 <h2 id="about-this-fork">About this fork<a class="anchor" aria-label="anchor" href="#about-this-fork"></a>
 </h2>
-<p>This is an R-only fork of <a href="https://github.com/walkerke/freestiler" class="external-link">walkerke/freestiler</a>. It tracks upstream’s R package and API, with one deliberate difference: native builds <strong>always statically compile both Rust backends into the package</strong>:</p>
-<ul>
-<li>
-<strong>Rust DuckDB</strong> (<code>duckdb-rs</code>, bundled) — powers <code><a href="reference/freestile_query.html">freestile_query()</a></code> and the <code>engine = "duckdb"</code> file reader, enabling out-of-R-memory, file-to-file and SQL-to-tiles workflows.</li>
-<li>
-<strong>GeoParquet</strong> (native Rust reader) — powers direct <code>.parquet</code> tiling via <code><a href="reference/freestile_file.html">freestile_file()</a></code>.</li>
-</ul>
-<p>Upstream ships these off by default on Windows; here they are always on, including on Windows (built with the Rtools45 GNU/UCRT toolchain). Because DuckDB is statically linked, the result is a single self-contained DLL with <strong>no external runtime dependencies</strong> — once installed, <code><a href="https://github.com/jimbrig/freestiler" class="external-link">library(freestiler)</a></code> gives you the full feature set with no PATH or runtime setup. This fork does <strong>not</strong> ship or maintain the Python package — use <a href="https://github.com/walkerke/freestiler" class="external-link">walkerke/freestiler</a> for that.</p>
-</div>
-<div class="section level2">
-<h2 id="new-in-030">New in 0.3.0<a class="anchor" aria-label="anchor" href="#new-in-030"></a>
-</h2>
-<p>Build clusters with category counts, create hexagon-only maps with category shares, and stream large point datasets from DuckDB. This release also reduces memory use when writing tiles and fixes date, CRS, and line-encoding issues. See the <a href="https://walker-data.com/freestiler/news/index.html" class="external-link">changelog</a> for details.</p>
-<p>Explore the <a href="https://walker-data.com/maps/census-2020/race.html" class="external-link">2020 Census race and ethnicity map</a> and <a href="https://walker-data.com/maps/census-2020/age.html" class="external-link">age map</a> to see dots, categorical hexagons, and donut clusters together.</p>
+<p>R-only fork of <a href="https://github.com/walkerke/freestiler" class="external-link">walkerke/freestiler</a>. Tracks upstream’s R API while <strong>always</strong> compiling both Rust backends into native builds (including Windows):</p>
+<table class="table">
+<colgroup>
+<col width="60%">
+<col width="40%">
+</colgroup>
+<thead><tr>
+<th>Backend</th>
+<th>Role</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Rust DuckDB (bundled)</td>
+<td>
+<code><a href="reference/freestile_query.html">freestile_query()</a></code>, <code>engine = "duckdb"</code> file reads, streaming points</td>
+</tr>
+<tr>
+<td>GeoParquet (native)</td>
+<td>Direct <code>.parquet</code> tiling via <code><a href="reference/freestile_file.html">freestile_file()</a></code>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Upstream often disables DuckDB on Windows CRAN builds; here it is on by default (Rtools GNU/UCRT). The DLL is self-contained — no runtime DuckDB/GeoParquet install on <code>PATH</code>.</p>
+<p>Python packaging is <strong>not</strong> maintained here; use upstream for that.</p>
+<p>Direction of travel for this fork (see <a href="AGENTS.html">AGENTS.md</a> and <a href="dev/docs/product-gaps.html">dev/docs/product-gaps.md</a>): strengthen <code>freestiler-core</code> first (layer-spec ingest, memory-honest multi-layer, recipes/metadata), with a possible Rust CLI as the primary non-R surface, then thin R bindings. Dynamic XYZ serving and style/map packaging are later work.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>This fork is Windows-focused and always compiles the Rust GeoParquet and DuckDB backends in. Install it from GitHub with <a href="https://pak.r-lib.org" class="external-link">pak</a>:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
 <span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"jimbrig/freestiler"</span><span class="op">)</span></span></code></pre></div>
-<p>From a local clone of this repo:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/local_install.html" class="external-link">local_install</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co"># or: just install</span></span></code></pre></div>
-<p>Once an r-universe binary has built, you can install it without a Rust toolchain:</p>
+<p>Local clone:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">just</span> install   <span class="co"># user library</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="co"># or: Rscript tools/install.R</span></span></code></pre></div>
+<p>r-universe binary (when published — no Rust toolchain required):</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span></span>
 <span>  <span class="st">"freestiler"</span>,</span>
 <span>  repos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"https://jimbrig.r-universe.dev"</span>, <span class="st">"https://cloud.r-project.org"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<blockquote>
-<p>The upstream package (Rust DuckDB off by default on Windows) is on <a href="https://cran.r-project.org/package=freestiler" class="external-link">CRAN</a> and <a href="https://walkerke.r-universe.dev" class="external-link">walkerke.r-universe.dev</a>.</p>
-</blockquote>
-<div class="section level3">
-<h3 id="verifying-the-rust-backends">Verifying the Rust backends<a class="anchor" aria-label="anchor" href="#verifying-the-rust-backends"></a>
-</h3>
+<p>Upstream CRAN / walkerke.r-universe builds may still omit Rust DuckDB on Windows.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/jimbrig/freestiler" class="external-link">freestiler</a></span><span class="op">)</span></span>
 <span><span class="fu">freestiler</span><span class="fu">:::</span><span class="fu">.has_rust_duckdb</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu">freestiler</span><span class="fu">:::</span><span class="fu">.has_rust_geoparquet</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="building-from-source-maintainers">Building from source (maintainers)<a class="anchor" aria-label="anchor" href="#building-from-source-maintainers"></a>
-</h3>
-<p>Use <a href="https://github.com/casey/just" class="external-link"><code>just</code></a> from the repo root (wrappers around <code>tools/install.R</code> and <code>tools/build.R</code>). The scripts locate Rtools via <code>pkgbuild</code>, isolate the build from any personal <code>~/.R/Makevars</code>, and verify both Rust backends are compiled in:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="ex">just</span> install   <span class="co"># user library</span></span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="ex">just</span> build     <span class="co"># isolated build/library/</span></span>
-<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="ex">just</span> smoke     <span class="co"># CI-style Rust feature checks</span></span>
-<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="ex">just</span> test</span></code></pre></div>
-<p>Equiv without just: <code>Rscript tools/install.R</code>, <code>Rscript tools/build.R</code>.</p>
-</div>
+<p>Maintainer commands: <code>just build</code>, <code>just test</code>, <code>just smoke</code>, <code>just document</code>, <code>just site</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
-<p>The main function is <code><a href="reference/freestile.html">freestile()</a></code>. Let’s tile the North Carolina counties dataset that ships with sf:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-spatial.github.io/sf/" class="external-link">sf</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/jimbrig/freestiler" class="external-link">freestiler</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">nc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_read.html" class="external-link">st_read</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"shape/nc.shp"</span>, package <span class="op">=</span> <span class="st">"sf"</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="reference/freestile.html">freestile</a></span><span class="op">(</span><span class="va">nc</span>, <span class="st">"nc_counties.pmtiles"</span>, layer_name <span class="op">=</span> <span class="st">"counties"</span><span class="op">)</span></span></code></pre></div>
-<p>That’s useful for checking your installation, but the same API handles much bigger data. Here we tile all 242,000 US block groups from <a href="https://github.com/walkerke/tigris" class="external-link">tigris</a>:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<span><span class="fu"><a href="reference/freestile.html">freestile</a></span><span class="op">(</span><span class="va">nc</span>, <span class="st">"nc_counties.pmtiles"</span>, layer_name <span class="op">=</span> <span class="st">"counties"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/view_tiles.html">view_tiles</a></span><span class="op">(</span><span class="st">"nc_counties.pmtiles"</span><span class="op">)</span></span></code></pre></div>
+<p>Larger <code>sf</code> example (US block groups via <a href="https://github.com/walkerke/tigris" class="external-link">tigris</a>):</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/walkerke/tigris" class="external-link">tigris</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>tigris_use_cache <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">bgs</span> <span class="op">&lt;-</span> <span class="fu">block_groups</span><span class="op">(</span>cb <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span></span>
 <span><span class="fu"><a href="reference/freestile.html">freestile</a></span><span class="op">(</span></span>
-<span>  <span class="va">bgs</span>,</span>
+<span>  <span class="fu">block_groups</span><span class="op">(</span>cb <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
 <span>  <span class="st">"us_bgs.pmtiles"</span>,</span>
 <span>  layer_name <span class="op">=</span> <span class="st">"bgs"</span>,</span>
 <span>  min_zoom <span class="op">=</span> <span class="fl">4</span>,</span>
 <span>  max_zoom <span class="op">=</span> <span class="fl">12</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+<div class="section level3">
+<h3 id="file-and-sql-input-out-of-r-memory">File and SQL input (out of R memory)<a class="anchor" aria-label="anchor" href="#file-and-sql-input-out-of-r-memory"></a>
+</h3>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/freestile_file.html">freestile_file</a></span><span class="op">(</span><span class="st">"census_blocks.parquet"</span>, <span class="st">"blocks.pmtiles"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/freestile_file.html">freestile_file</a></span><span class="op">(</span><span class="st">"counties.gpkg"</span>, <span class="st">"counties.pmtiles"</span>, engine <span class="op">=</span> <span class="st">"duckdb"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/freestile_query.html">freestile_query</a></span><span class="op">(</span></span>
+<span>  query <span class="op">=</span> <span class="st">"SELECT * FROM read_parquet('blocks.parquet') WHERE state = 'NC'"</span>,</span>
+<span>  output <span class="op">=</span> <span class="st">"nc_blocks.pmtiles"</span>,</span>
+<span>  layer_name <span class="op">=</span> <span class="st">"blocks"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># large point sets — streaming (points only today)</span></span>
+<span><span class="fu"><a href="reference/freestile_query.html">freestile_query</a></span><span class="op">(</span></span>
+<span>  query <span class="op">=</span> <span class="st">"SELECT * FROM read_parquet('points.parquet')"</span>,</span>
+<span>  output <span class="op">=</span> <span class="st">"points.pmtiles"</span>,</span>
+<span>  layer_name <span class="op">=</span> <span class="st">"pts"</span>,</span>
+<span>  streaming <span class="op">=</span> <span class="st">"always"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
-<div class="section level2">
-<h2 id="viewing-tiles">Viewing tiles<a class="anchor" aria-label="anchor" href="#viewing-tiles"></a>
-</h2>
-<p>The quickest way to view a tileset is <code><a href="reference/view_tiles.html">view_tiles()</a></code>, which starts a local server and opens an interactive map:</p>
+<div class="section level3">
+<h3 id="multi-layer-sf-today">Multi-layer (sf today)<a class="anchor" aria-label="anchor" href="#multi-layer-sf-today"></a>
+</h3>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/view_tiles.html">view_tiles</a></span><span class="op">(</span><span class="st">"us_bgs.pmtiles"</span><span class="op">)</span></span></code></pre></div>
-<p>For more control, use <code><a href="reference/serve_tiles.html">serve_tiles()</a></code> to start a local server and build your map with <a href="https://walker-data.com/mapgl/" class="external-link">mapgl</a>:</p>
+<code class="sourceCode R"><span><span class="fu"><a href="reference/freestile.html">freestile</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>    counties <span class="op">=</span> <span class="fu"><a href="reference/freestile_layer.html">freestile_layer</a></span><span class="op">(</span><span class="va">nc</span>, min_zoom <span class="op">=</span> <span class="fl">0</span>, max_zoom <span class="op">=</span> <span class="fl">10</span><span class="op">)</span>,</span>
+<span>    centroids <span class="op">=</span> <span class="fu"><a href="reference/freestile_layer.html">freestile_layer</a></span><span class="op">(</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/geos_unary.html" class="external-link">st_centroid</a></span><span class="op">(</span><span class="va">nc</span><span class="op">)</span>, min_zoom <span class="op">=</span> <span class="fl">6</span>, max_zoom <span class="op">=</span> <span class="fl">14</span><span class="op">)</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  <span class="st">"nc_layers.pmtiles"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Multi-layer from files/queries without loading <code>sf</code> is tracked work (API parity with the in-memory path).</p>
+</div>
+<div class="section level3">
+<h3 id="viewing-with-mapgl">Viewing with mapgl<a class="anchor" aria-label="anchor" href="#viewing-with-mapgl"></a>
+</h3>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://walker-data.com/mapgl/" class="external-link">mapgl</a></span><span class="op">)</span></span>
 <span></span>
@@ -177,115 +198,45 @@
 <span>    source <span class="op">=</span> <span class="st">"bgs-src"</span>,</span>
 <span>    source_layer <span class="op">=</span> <span class="st">"bgs"</span>,</span>
 <span>    fill_color <span class="op">=</span> <span class="st">"navy"</span>,</span>
-<span>    fill_opacity <span class="op">=</span> <span class="fl">0.5</span>,</span>
-<span>    hover_options <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
-<span>      fill_color <span class="op">=</span> <span class="st">"#ffffcc"</span>,</span>
-<span>      fill_opacity <span class="op">=</span> <span class="fl">0.9</span></span>
-<span>    <span class="op">)</span></span>
+<span>    fill_opacity <span class="op">=</span> <span class="fl">0.5</span></span>
 <span>  <span class="op">)</span></span></code></pre></div>
-<p>The built-in server handles CORS and range requests automatically. For tilesets larger than ~1 GB, use an external server like <code>npx http-server /path --cors -c-1</code> for better performance. See the <a href="https://walker-data.com/freestiler/articles/mapping.html" class="external-link">Mapping with mapgl</a> article for a full walkthrough.</p>
+<p><code><a href="reference/serve_tiles.html">serve_tiles()</a></code> is convenience httpuv with CORS + Range. For multi-GB archives prefer an external range-capable server (e.g. <code>npx http-server … --cors -c-1</code>).</p>
+</div>
 </div>
 <div class="section level2">
-<h2 id="duckdb-queries">DuckDB queries<a class="anchor" aria-label="anchor" href="#duckdb-queries"></a>
+<h2 id="formats-and-extras">Formats and extras<a class="anchor" aria-label="anchor" href="#formats-and-extras"></a>
 </h2>
-<p>If your data lives in DuckDB, <code><a href="reference/freestile_query.html">freestile_query()</a></code> lets you filter, join, and transform with SQL before tiling:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/freestile_query.html">freestile_query</a></span><span class="op">(</span></span>
-<span>  query <span class="op">=</span> <span class="st">"SELECT * FROM read_parquet('blocks.parquet') WHERE state = 'NC'"</span>,</span>
-<span>  output <span class="op">=</span> <span class="st">"nc_blocks.pmtiles"</span>,</span>
-<span>  layer_name <span class="op">=</span> <span class="st">"blocks"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>For very large point datasets, the streaming pipeline avoids loading the full result into memory. On a recent run, <code><a href="reference/freestile_query.html">freestile_query()</a></code> streamed 146 million US job points from DuckDB into a 2.3 GB PMTiles archive in about 12 minutes:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/freestile_query.html">freestile_query</a></span><span class="op">(</span></span>
-<span>  query <span class="op">=</span> <span class="st">"SELECT naics, state, ST_Point(lon, lat) AS geometry FROM jobs_dots"</span>,</span>
-<span>  output <span class="op">=</span> <span class="st">"us_jobs_dots.pmtiles"</span>,</span>
-<span>  db_path <span class="op">=</span> <span class="va">db_path</span>,</span>
-<span>  layer_name <span class="op">=</span> <span class="st">"jobs"</span>,</span>
-<span>  tile_format <span class="op">=</span> <span class="st">"mvt"</span>,</span>
-<span>  min_zoom <span class="op">=</span> <span class="fl">4</span>,</span>
-<span>  max_zoom <span class="op">=</span> <span class="fl">14</span>,</span>
-<span>  base_zoom <span class="op">=</span> <span class="fl">14</span>,</span>
-<span>  drop_rate <span class="op">=</span> <span class="fl">2.5</span>,</span>
-<span>  source_crs <span class="op">=</span> <span class="st">"EPSG:4326"</span>,</span>
-<span>  streaming <span class="op">=</span> <span class="st">"always"</span>,</span>
-<span>  overwrite <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<ul>
+<li>Default tile format: <strong>MVT</strong>; optional <code>tile_format = "mlt"</code> (MapLibre Tiles).</li>
+<li>H3 zoom-adaptive hex binning: <code><a href="reference/freestile_h3.html">freestile_h3()</a></code> / <code><a href="reference/view_h3_tiles.html">view_h3_tiles()</a></code>.</li>
+<li>Categorical point clustering via <code>freestile(..., category = …)</code> (see NEWS / vignettes).</li>
+</ul>
 </div>
 <div class="section level2">
-<h2 id="direct-file-input">Direct file input<a class="anchor" aria-label="anchor" href="#direct-file-input"></a>
+<h2 id="known-gaps-this-fork">Known gaps (this fork)<a class="anchor" aria-label="anchor" href="#known-gaps-this-fork"></a>
 </h2>
-<p>You can tile spatial files without loading them into R first:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># GeoParquet</span></span>
-<span><span class="fu"><a href="reference/freestile_file.html">freestile_file</a></span><span class="op">(</span><span class="st">"census_blocks.parquet"</span>, <span class="st">"blocks.pmtiles"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># GeoPackage, Shapefile, or other formats via DuckDB</span></span>
-<span><span class="fu"><a href="reference/freestile_file.html">freestile_file</a></span><span class="op">(</span><span class="st">"counties.gpkg"</span>, <span class="st">"counties.pmtiles"</span>, engine <span class="op">=</span> <span class="st">"duckdb"</span><span class="op">)</span></span></code></pre></div>
-<p>For GeoParquet, the direct file path is powered by the Rust <code>geoparquet</code> backend, which this fork always compiles in. <code><a href="reference/freestile_file.html">freestile_file()</a></code> reads WKB-based GeoParquet directly without materializing the data in the R session first.</p>
-</div>
-<div class="section level2">
-<h2 id="dynamic-hexagonal-binning">Dynamic hexagonal binning<a class="anchor" aria-label="anchor" href="#dynamic-hexagonal-binning"></a>
-</h2>
-<p>For dense point datasets, <code><a href="reference/freestile_h3.html">freestile_h3()</a></code> aggregates points into H3 hexagons at zoom-appropriate resolutions: low zooms show coarse hexes summarizing whole regions, intermediate zooms show progressively finer hexes, and <code>base_zoom</code> and above reveal the underlying points. Aggregation rules are user-defined SQL (<code>COUNT(*)</code>, <code>SUM(pop)</code>, <code>AVG(value)</code>, …).</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/freestile_h3.html">freestile_h3</a></span><span class="op">(</span></span>
-<span>  <span class="va">pts</span>,</span>
-<span>  <span class="st">"wind.pmtiles"</span>,</span>
-<span>  agg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>n <span class="op">=</span> <span class="st">"COUNT(*)"</span>, total_mw <span class="op">=</span> <span class="st">"SUM(capacity_mw)"</span><span class="op">)</span>,</span>
-<span>  min_zoom <span class="op">=</span> <span class="fl">2</span>, max_zoom <span class="op">=</span> <span class="fl">12</span>, base_zoom <span class="op">=</span> <span class="fl">10</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="reference/view_h3_tiles.html">view_h3_tiles</a></span><span class="op">(</span><span class="st">"wind.pmtiles"</span>, agg_column <span class="op">=</span> <span class="st">"n"</span><span class="op">)</span></span></code></pre></div>
-<p>Pass <code>fade = TRUE</code> to cross-fade between resolutions instead of swapping cleanly. Requires DuckDB and its <a href="https://duckdb.org/community_extensions/extensions/h3" class="external-link">H3 community extension</a>; see the <a href="https://walker-data.com/freestiler/articles/h3-hexagonal-binning.html" class="external-link">Hexagonal binning with H3</a> article.</p>
-<p>For hexagons at every zoom, set <code>include_points = FALSE</code> and leave <code>base_zoom</code> unset. Add <code>category</code> and <code>category_values</code> to retain category counts, the most common category, its share, and ties.</p>
-</div>
-<div class="section level2">
-<h2 id="categorical-point-clusters">Categorical point clusters<a class="anchor" aria-label="anchor" href="#categorical-point-clusters"></a>
-</h2>
-<p>With R development version 0.3.0.9000 or later from R-Universe, pass a POINT sf object directly to <code><a href="reference/freestile.html">freestile()</a></code> to count categories within each cluster:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/freestile.html">freestile</a></span><span class="op">(</span></span>
-<span>  <span class="va">places</span>, <span class="st">"place_clusters.pmtiles"</span>,</span>
-<span>  layer_name <span class="op">=</span> <span class="st">"places"</span>, min_zoom <span class="op">=</span> <span class="fl">0</span>, max_zoom <span class="op">=</span> <span class="fl">14</span>,</span>
-<span>  cluster_distance <span class="op">=</span> <span class="fl">60</span>, cluster_maxzoom <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>  category <span class="op">=</span> <span class="st">"kind"</span>, category_values <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"park"</span>, <span class="st">"museum"</span>, <span class="st">"library"</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>The same archive contains individual points above <code>cluster_maxzoom</code>. Python accepts a GeoDataFrame in the same way. This path works without native GeoParquet or DuckDB, including in the CRAN build; it is not in the released 0.3.0 packages yet. See <a href="https://walker-data.com/freestiler/articles/point-clustering.html" class="external-link">Point clustering</a> for a complete power-plant example in R and Python.</p>
-</div>
-<div class="section level2">
-<h2 id="multi-layer-tilesets">Multi-layer tilesets<a class="anchor" aria-label="anchor" href="#multi-layer-tilesets"></a>
-</h2>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pts</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/geos_unary.html" class="external-link">st_centroid</a></span><span class="op">(</span><span class="va">nc</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="reference/freestile.html">freestile</a></span><span class="op">(</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
-<span>    counties <span class="op">=</span> <span class="fu"><a href="reference/freestile_layer.html">freestile_layer</a></span><span class="op">(</span><span class="va">nc</span>, min_zoom <span class="op">=</span> <span class="fl">0</span>, max_zoom <span class="op">=</span> <span class="fl">10</span><span class="op">)</span>,</span>
-<span>    centroids <span class="op">=</span> <span class="fu"><a href="reference/freestile_layer.html">freestile_layer</a></span><span class="op">(</span><span class="va">pts</span>, min_zoom <span class="op">=</span> <span class="fl">6</span>, max_zoom <span class="op">=</span> <span class="fl">14</span><span class="op">)</span></span>
-<span>  <span class="op">)</span>,</span>
-<span>  <span class="st">"nc_layers.pmtiles"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level2">
-<h2 id="tile-formats">Tile formats<a class="anchor" aria-label="anchor" href="#tile-formats"></a>
-</h2>
-<p>freestiler defaults to <a href="https://github.com/mapbox/vector-tile-spec" class="external-link">Mapbox Vector Tiles (MVT)</a>, the widely-supported protobuf format that works with both MapLibre GL JS and Mapbox GL JS. The experimental <a href="https://github.com/maplibre/maplibre-tile-spec" class="external-link">MapLibre Tiles (MLT)</a> format is also available via <code>tile_format = "mlt"</code> and can produce smaller files for polygon and line data.</p>
+<p>Honest limitations relative to a full “data → tiles → style → map → serve” pipeline are summarized in <a href="dev/docs/product-gaps.html">dev/docs/product-gaps.md</a> (ingest parity, recipes, overviews, TileJSON/style packaging, dynamic serve). Short version:</p>
+<ol style="list-style-type: decimal">
+<li>
+<strong>API parity</strong> — multi-layer + per-layer encode knobs are richest on <code>sf</code>; file/query paths are mostly single-layer today.</li>
+<li>
+<strong>Thinning defaults</strong> — without <code>drop_rate</code> / zoom discipline, archives can be huge; cartographic “recipe” tooling is not packaged yet.</li>
+<li>
+<strong>Map packaging</strong> — beyond <code><a href="reference/view_tiles.html">view_tiles()</a></code> / mapgl glue, there is no first-class style/TileJSON/recipe export for MapLibre clients.</li>
+<li>
+<strong>Dynamic tiles</strong> — product is batch PMTiles (+ static HTTP), not on-demand MVT/MLT XYZ from DuckDB/GeoParquet.</li>
+</ol>
+<p>Tracked work: open issues on this repo; near-term themes in <a href="AGENTS.html">AGENTS.md</a>.</p>
 </div>
 <div class="section level2">
 <h2 id="learn-more">Learn more<a class="anchor" aria-label="anchor" href="#learn-more"></a>
 </h2>
 <ul>
-<li>
-<a href="https://walker-data.com/freestiler/articles/getting-started.html" class="external-link">Getting Started</a> - full tutorial</li>
-<li>
-<a href="https://walker-data.com/freestiler/articles/mapping.html" class="external-link">Mapping with mapgl</a> - viewing and styling tiles with mapgl</li>
-<li>
-<a href="https://walker-data.com/freestiler/articles/point-clustering.html" class="external-link">Point clustering</a> - clusters with category counts</li>
-<li>
-<a href="https://walker-data.com/freestiler/articles/h3-hexagonal-binning.html" class="external-link">Hexagonal binning with H3</a> - counts, summaries, and categorical hexagons</li>
-<li>
-<a href="https://walker-data.com/freestiler/articles/maplibre-tiles.html" class="external-link">MapLibre Tiles (MLT)</a> - MLT vs MVT and when to use each</li>
+<li>Fork pkgdown: <a href="http://docs.jimbrig.com/freestiler/">docs.jimbrig.com/freestiler</a> (<code>gh-pages</code>)</li>
+<li>Product gaps / sequencing: <a href="dev/docs/product-gaps.html">dev/docs/product-gaps.md</a>
+</li>
+<li>Upstream: <a href="https://walker-data.com/freestiler/" class="external-link">walker-data freestiler</a>, <a href="https://walker-data.com/mapgl/" class="external-link">mapgl</a>
+</li>
 </ul>
 </div>
 </div>

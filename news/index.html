@@ -42,9 +42,22 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.0.9000" id="freestiler-0309000">freestiler 0.3.0.9000<a class="anchor" aria-label="anchor" href="#freestiler-0309000"></a></h2>
+<div class="section level3">
+<h3 id="fork-notes-jimbrigfreestiler-0-3-0-9000">Fork notes (jimbrig/freestiler)<a class="anchor" aria-label="anchor" href="#fork-notes-jimbrigfreestiler-0-3-0-9000"></a></h3>
+<ul><li>Synced with upstream <code>0.3.0.9000</code> while keeping always-on Rust DuckDB + GeoParquet on Windows native builds.</li>
+<li>Dropped the Python package tree from this fork; R + <code>freestiler-core</code> only.</li>
+<li>Repo layout: <code>tools/install.R</code> / <code>tools/build.R</code>, root <code>justfile</code>, pkgdown config under <code>pkgdown/</code>, site published from <code>gh-pages</code> (no committed <code>docs/</code>).</li>
+<li>Dropped in-tree CRAN submission notes (<code>cran-comments.md</code>); this fork targets GitHub / r-universe installs.</li>
+<li>Bundled USGS USWTDB sample as <code>inst/extdata/uswtdb_turbines.csv</code> for the H3 vignette (no cwd download on render).</li>
+<li>CI: one Windows compile per event; Linux <code>freestiler-core</code> cargo job; pkgdown path filters; online cargo builds reuse the default <code>CARGO_HOME</code> cache.</li>
+<li>Windows <code>PKG_LIBS</code> now includes <code>-lsynchronization</code> so Rust std futex APIs (<code>WaitOnAddress</code> / <code>WakeByAddress*</code>) link into the R DLL.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="upstream-merged-0-3-0-9000">Upstream (merged)<a class="anchor" aria-label="anchor" href="#upstream-merged-0-3-0-9000"></a></h3>
 <ul><li>
 <code><a href="../reference/freestile.html">freestile()</a></code> now accepts <code>category</code>, <code>category_values</code>, and <code>cluster_min_points</code> for a single POINT sf object or GeoDataFrame. Category counts use the same Supercluster engine as file clustering, with individual points above <code>cluster_maxzoom</code> in the same archive. The in-memory path works without GeoParquet or DuckDB support, including in the CRAN build. Existing calls without category options retain their clustering behavior.</li>
 </ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.0" id="freestiler-030">freestiler 0.3.0<a class="anchor" aria-label="anchor" href="#freestiler-030"></a></h2><p class="text-muted">CRAN release: 2026-10-02</p>
 <ul><li><p>MVT output with <code>simplification = FALSE</code> now preserves line positions when a sub-pixel line part disappears during encoding. This affects multipart lines and single lines split by tile clipping. Default simplification and MLT output are unaffected.</p></li>
