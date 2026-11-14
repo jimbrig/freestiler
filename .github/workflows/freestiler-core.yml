@@ -60,3 +60,10 @@ jobs:
       - name: cargo test --lib
         working-directory: src/rust/freestiler-core
         run: cargo test --locked --lib ${{ matrix.features }}
+
+      # Integration tests for LayeredTiler / gzip_level / coalesce order (PRs #31–#33).
+      # Separate from --lib so a missing cmake/mlt-core toolchain fails here only.
+      - name: cargo test LayeredTiler stack
+        if: matrix.label == 'default'
+        working-directory: src/rust/freestiler-core
+        run: cargo test --locked --test coalesce_order --test gzip_level --test layered

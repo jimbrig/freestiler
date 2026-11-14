@@ -139,9 +139,11 @@ attribute bomb. File API should accept `sql` or `columns=` even for
 3. **Cluster:** precomputes `HashMap<zoom, Vec<Feature>>` for all points.
 4. **Per zoom:** parallel VW simplify into another geometry vec; assign
    every feature to tiles; clip/encode.
-5. **Archive:** `generate_tiles` returns `Vec<(TileCoord, bytes)>` of
-   **every tile** before `write_pmtiles`. The point `streaming` path
-   already spools tiles (`TileSpool`); the default path does not.
+5. **Archive:** the default path now spools encoded tiles via `TileSpool`
+   (same writer as the point `streaming` path). Peak cost is still the
+   decoded `LayerData` (+ simplify/cluster maps), not the finished archive.
+   Multi-layer peak was historically the *sum* of layers; upstream
+   LayeredTiler (absorbed) brings peak ≈ largest layer.
 6. **Named `streaming`:** `CREATE TEMP TABLE` of **all points**, Morton
    rank in SQL, then per-zoom ordered scan. No Rust `Feature` vec, but
    DuckDB still holds O(N) points. Polygon/line rejected. No clustering.

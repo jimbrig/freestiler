@@ -15,15 +15,35 @@
   path filters; online cargo builds reuse the default `CARGO_HOME` cache.
 * Windows `PKG_LIBS` now includes `-lsynchronization` so Rust std futex APIs
   (`WaitOnAddress` / `WakeByAddress*`) link into the R DLL.
+* Absorbed upstream LayeredTiler stack (walkerke PRs #31–#33): reproducible
+  `coalesce`, `gzip_level`, and one-layer-at-a-time multi-layer tiling in
+  `freestiler-core` / R `freestile()`.
 
-## Upstream (merged)
+## Upstream (absorbed / merged)
+
+* Multi-layer tilesets are now tiled one layer at a time, so peak memory
+  follows the largest layer instead of the sum of all layers (upstream #17 /
+  PR #33). Each layer's tiles are spooled to a temporary file and joined per
+  tile at the end. MVT and MLT tiles are sequences of independently encoded
+  layers, so the archive is byte-identical to tiling every layer at once.
+  `freestile()` uses this for every multi-layer call.
 
 * `freestile()` now accepts `category`, `category_values`, and
-  `cluster_min_points` for a single POINT sf object or GeoDataFrame. Category
-  counts use the same Supercluster engine as file clustering, with individual
-  points above `cluster_maxzoom` in the same archive. The in-memory path works
-  without GeoParquet or DuckDB support, including in the CRAN build. Existing
-  calls without category options retain their clustering behavior.
+  `cluster_min_points` for a single POINT sf object. Category counts use the
+  same Supercluster engine as file clustering, with individual points above
+  `cluster_maxzoom` in the same archive. The in-memory path works without
+  GeoParquet or DuckDB support. Existing calls without category options retain
+  their clustering behavior.
+
+* `coalesce = TRUE` now produces the same archive on every run. Coalesced
+  groups were emitted in hash-map order, which changes from run to run; they
+  now keep the order in which their first feature appears in the tile
+  (upstream PR #31).
+
+* `freestile()` gains `gzip_level` to set the gzip level of tile data (0-9).
+  The default stays the fast level 1, so existing output is unchanged. Higher
+  levels only change compression: decompressed tiles are identical
+  (upstream PR #32).
 
 # freestiler 0.3.0
 
