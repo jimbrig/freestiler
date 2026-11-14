@@ -1,0 +1,61 @@
+name: freestiler-core
+
+# Fast Rust-only feedback. Does not replace the Windows R package job.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/freestiler-core.yml"
+      - "src/rust/freestiler-core/**"
+      - "src/rust/Cargo.toml"
+      - "src/rust/Cargo.lock"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/freestiler-core.yml"
+      - "src/rust/freestiler-core/**"
+      - "src/rust/Cargo.toml"
+      - "src/rust/Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: "2"
+
+jobs:
+  check:
+    name: cargo (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - features: ""
+            label: default
+          - features: "--features geoparquet,duckdb"
+            label: geoparquet+duckdb
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/rust/freestiler-core/target
+          key: ${{ runner.os }}-core-${{ matrix.label }}-${{ hashFiles('src/rust/freestiler-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-core-${{ matrix.label }}-
+
+      - name: cargo check
+        working-directory: src/rust/freestiler-core
+        run: cargo check --locked ${{ matrix.features }}
+
+      - name: cargo test (lib)
+        working-directory: src/rust/freestiler-core
+        run: cargo test --locked --lib ${{ matrix.features }}

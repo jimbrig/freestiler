@@ -52,3 +52,16 @@ Do not invent parallel multi-layer designs when upstream `LayeredTiler` (PR stac
 - No committed `python/`, `docs/` site output, `build/` artifacts, or `dev/references/` clones
 - No CRAN submission paperwork in-tree (`cran-comments.md`); this fork is GitHub / r-universe oriented
 - Do not document agent-private filesystem paths in this repository
+
+## CI / release surfaces
+
+| Workflow | Role |
+|----------|------|
+| `r-package.yml` | One Windows compile per event (PR → `R CMD check`; main/tag → binary + smoke + tests). Tags `r-v*` attach the Windows zip |
+| `freestiler-core.yml` | Linux `cargo check/test` for the core crate (default + `geoparquet,duckdb`) |
+| `supercluster-parity.yml` | Kernel fixture parity across OS × MSRV/stable |
+| `pkgdown.yaml` | Docs-path-filtered site build → `gh-pages` |
+
+`freestiler-core` stays `publish = false` on crates.io until a stable public Rust
+API/CLI exists. Do not add a crates.io publish job yet; when a CLI lands, prefer
+GitHub Release assets on `rust-v*` tags first.

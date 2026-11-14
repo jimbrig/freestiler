@@ -147,6 +147,7 @@ impl Scratch {
         let base = std::env::var_os("FREESTILER_TEMP_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
+        #[allow(unused_mut)] // mode() is unix-only
         let mut builder = fs::DirBuilder::new();
         #[cfg(unix)]
         {

@@ -9,6 +9,10 @@
   config under `pkgdown/`, site published from `gh-pages` (no committed `docs/`).
 * Dropped in-tree CRAN submission notes (`cran-comments.md`); this fork targets
   GitHub / r-universe installs.
+* Bundled USGS USWTDB sample as `inst/extdata/uswtdb_turbines.csv` for the H3
+  vignette (no cwd download on render).
+* CI: one Windows compile per event; Linux `freestiler-core` cargo job; pkgdown
+  path filters; online cargo builds reuse the default `CARGO_HOME` cache.
 * Windows `PKG_LIBS` now includes `-lsynchronization` so Rust std futex APIs
   (`WaitOnAddress` / `WakeByAddress*`) link into the R DLL.
 

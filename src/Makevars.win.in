@@ -26,10 +26,12 @@ VENDOR_DIR = vendor
 $(STATLIB):
 	mkdir -p $(TARGET_DIR)/libgcc_mock
 	touch $(TARGET_DIR)/libgcc_mock/libgcc_eh.a
-	rm -Rf $(CARGOTMP)
 
-  # If @USE_VENDOR@ is true, use vendored crates for offline compilation.
+  # Vendored/offline builds isolate CARGO_HOME. Online/CI builds keep the
+  # default cargo home so registry + git caches (and incremental target dirs)
+  # survive across installs.
 	if [ "@USE_VENDOR@" = "true" ]; then \
+		rm -Rf $(CARGOTMP); \
 		if [ -d ./vendor ]; then \
 			echo "=== Using offline vendor directory ==="; \
 			mkdir -p $(CARGOTMP) && \
@@ -46,16 +48,19 @@ $(STATLIB):
 		find ./vendor -type f \( -name '._*' -o -name '.DS_Store' \) -delete; \
 	fi
 
-	# Build the project using Cargo with additional flags
-	export CARGO_HOME=$(CARGOTMP) && \
+	if [ "@USE_VENDOR@" = "true" ]; then \
+		export CARGO_HOME=$(CARGOTMP); \
+	fi; \
 	export LIBRARY_PATH="$(LIBRARY_PATH);$(CURDIR)/$(TARGET_DIR)/libgcc_mock" && \
 		RUSTFLAGS="$(RUSTFLAGS) --print=native-static-libs" cargo build @CRAN_FLAGS@ @FEATURES@ --target=$(TARGET) --lib @PROFILE@ --manifest-path=rust/Cargo.toml --target-dir=$(TARGET_DIR)
 
-	# Always clean up CARGOTMP
-	rm -Rf $(CARGOTMP);
+	if [ "@USE_VENDOR@" = "true" ]; then \
+		rm -Rf $(CARGOTMP); \
+	fi
 
 rust_clean: $(SHLIB)
-	rm -Rf $(CARGOTMP) $(VENDOR_DIR) @CLEAN_TARGET@
+	rm -Rf $(VENDOR_DIR) @CLEAN_TARGET@
+	if [ "@USE_VENDOR@" = "true" ]; then rm -Rf $(CARGOTMP); fi
 
 clean:
-	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) $(TARGET_DIR) $(VENDOR_DIR)
+	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) $(TARGET_DIR) $(VENDOR_DIR) $(CARGOTMP)

@@ -11,9 +11,11 @@ on:
       - "src/**"
       - "tools/**"
       - "tests/**"
+      - "inst/**"
       - "configure"
       - "configure.win"
       - "cleanup"
+      - "justfile"
   push:
     branches:
       - main
@@ -28,9 +30,11 @@ on:
       - "src/**"
       - "tools/**"
       - "tests/**"
+      - "inst/**"
       - "configure"
       - "configure.win"
       - "cleanup"
+      - "justfile"
   workflow_dispatch:
 
 permissions:
@@ -38,56 +42,14 @@ permissions:
 
 env:
   NOT_CRAN: "true"
+  CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    name: R-CMD-check (Windows)
-    runs-on: windows-2022
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: r-lib/actions/setup-r@v2
-        with:
-          use-public-rspm: true
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-gnu
-
-      - name: Cache cargo + Rust target
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src/rust/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::rcmdcheck
-          needs: check
-
-      - name: Use online Cargo resolution in CI
-        shell: bash
-        run: |
-          rm -f src/rust/vendor.tar.xz
-          rm -rf src/vendor src/.cargo
-
-      - uses: r-lib/actions/check-r-package@v2
-        env:
-          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: gcc.exe
-        with:
-          args: 'c("--no-manual", "--no-multiarch")'
-          error-on: '"error"'
-          upload-snapshots: true
-
-  binary:
-    name: Windows binary
-    # Skip on PRs (the check job already compiles); build/publish on main and tags.
-    if: github.event_name != 'pull_request'
+  # Single Windows runner, one DuckDB/GeoParquet compile per event:
+  #   PR / dispatch → R CMD check
+  #   push main / tags → INSTALL --build + feature-smoke (+ release on r-v*)
+  windows:
+    name: Windows
     runs-on: windows-2022
     permissions:
       contents: write
@@ -103,19 +65,19 @@ jobs:
         with:
           targets: x86_64-pc-windows-gnu
 
-      - name: Cache cargo + Rust target
+      - name: Cache cargo registry + git
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src/rust/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-reg-${{ hashFiles('src/rust/Cargo.lock', 'src/rust/freestiler-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-reg-
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::pkgbuild
+          extra-packages: any::rcmdcheck, any::pkgbuild, any::testthat
           needs: check
 
       - name: Use online Cargo resolution in CI
@@ -124,7 +86,18 @@ jobs:
           rm -f src/rust/vendor.tar.xz
           rm -rf src/vendor src/.cargo
 
-      - name: Build + install Windows binary
+      - name: R CMD check
+        if: github.event_name == 'pull_request'
+        uses: r-lib/actions/check-r-package@v2
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: gcc.exe
+        with:
+          args: 'c("--no-manual", "--no-multiarch")'
+          error-on: '"error"'
+          upload-snapshots: true
+
+      - name: Build Windows binary
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: gcc.exe
@@ -134,11 +107,19 @@ jobs:
           mv *.zip binary/
 
       - name: Verify both Rust backends are compiled in
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           Rscript tools/feature-smoke.R --require-rust-duckdb --require-geoparquet
 
+      - name: Unit tests (installed package)
+        if: github.event_name != 'pull_request'
+        shell: Rscript {0}
+        run: |
+          testthat::test_local(load_package = "installed")
+
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/r-v')
         with:
           name: r-binary-windows
           path: binary/*.zip

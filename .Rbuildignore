@@ -2,7 +2,6 @@
 ^.*\.Rproj$
 ^\.gitignore$
 ^\.git$
-^turbines\.csv$
 ^LICENSE\.md$
 ^src/\.cargo$
 ^src/Makevars$
